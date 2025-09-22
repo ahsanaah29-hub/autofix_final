@@ -3381,18 +3381,24 @@ async function loadApprovalScreen(reportId) {
                 const list = document.getElementById(listId);
                 list.innerHTML = '';
                 try {
-                    const items = JSON.parse(dataString);
+                    const items = JSON.parse(dataString || '[]'); // Safely parse the data
                     if (items && items.length > 0) {
                         items.forEach(item => {
                             const li = document.createElement('li');
-                            li.textContent = item;
+                            // **THE FIX: Check if the item is an object and use its .text property**
+                            if (typeof item === 'object' && item !== null && item.text) {
+                                li.textContent = item.text;
+                            } else {
+                                // Fallback for older data that might just be strings
+                                li.textContent = item;
+                            }
                             list.appendChild(li);
                         });
                     } else {
                         list.innerHTML = '<li>N/A</li>';
                     }
-                } catch(e) {
-                    list.innerHTML = '<li>N/A</li>';
+                } catch (e) {
+                    list.innerHTML = '<li>Error loading data</li>';
                 }
             };
             populateList('print-complaints-list', reportData.complaint);
