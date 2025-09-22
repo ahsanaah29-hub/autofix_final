@@ -511,14 +511,13 @@
         <!-- The new, cleaner layout for adding mechanic suggestions -->
 <div class="border-t pt-4">
     <label class="form-label">Add New Suggested Repair (from Mechanic)</label>
-    <!-- The updated layout with a smaller amount field -->
-<div class="flex items-center justify-between gap-3 p-3 bg-gray-100 rounded-lg">
+    <div class="flex items-center justify-between gap-3 p-3 bg-gray-100 rounded-lg">
     <div class="flex-1">
         <input id="suggestion-input" type="text" class="form-input !py-1 !px-2 w-full" placeholder="e.g., Change engine oil">
     </div>
     <div class="flex items-center gap-2">
         <span class="font-bold text-gray-500">₹</span>
-        <!-- MODIFIED: Changed w-28 to w-20 -->
+        <!-- WIDTH CHANGE: from w-28 to w-20 -->
         <input id="suggestion-amount-input" type="number" class="form-input !py-1 !px-2 w-20 text-right" placeholder="Cost">
         <button type="button" onclick="addSuggestion()" class="p-2 bg-blue-100 text-blue-600 rounded-full hover:bg-blue-200 shrink-0">
             <span class="material-symbols-outlined">add</span>
@@ -2203,7 +2202,7 @@ function renderSuggestions(complaints = [], suggestions = [], approved = []) {
                 </div>
                 <div class="flex items-center gap-1">
                     <span class="font-bold text-gray-500">₹</span>
-                    {/* MODIFIED: Changed w-28 to w-20 */}
+                    <!-- WIDTH CHANGE: from w-28 to w-20 -->
                     <input type="number" class="form-input !py-1 !px-2 w-20 text-right" 
                            value="${item.amount || 0}" placeholder="Cost"
                            data-text="${sanitizedText}" oninput="updateComplaintCost(this.dataset.text, this.value)">
@@ -2215,7 +2214,7 @@ function renderSuggestions(complaints = [], suggestions = [], approved = []) {
         customerComplaintsList.innerHTML = '<p class="text-sm text-gray-500">No original complaints were registered.</p>';
     }
     
-    // 2. Render newly added mechanic suggestions (with delete buttons)
+    // The rest of the function remains unchanged...
     executiveList.innerHTML = '';
     if (suggestions.length > 0) {
         suggestions.forEach((item, index) => {
@@ -2231,7 +2230,6 @@ function renderSuggestions(complaints = [], suggestions = [], approved = []) {
         });
     }
 
-    // 3. Render mechanic suggestions again, but with checkboxes for approval tracking
     customerApprovalList.innerHTML = '';
     if (suggestions.length > 0) {
         suggestions.forEach(item => {
