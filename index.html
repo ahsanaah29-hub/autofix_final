@@ -2262,7 +2262,7 @@ function renderSuggestions(complaints = [], suggestions = [], approved = []) {
             complaintItem.className = 'flex items-center justify-between gap-3 p-3 bg-gray-100 rounded-lg';
             complaintItem.innerHTML = `
                 <div class="flex-1">
-                    <span class="font-medium break-all">${item.text}</span>
+                    <span class="font-medium break-words">${item.text}</span>
                 </div>
                 <div class="flex items-center gap-1">
                     <span class="font-bold text-gray-500">₹</span>
@@ -2295,16 +2295,12 @@ function renderSuggestions(complaints = [], suggestions = [], approved = []) {
 
     // 3. Render the COMBINED list for the final approval checklist
     customerApprovalList.innerHTML = '';
-    
-    // --- MODIFICATION REVERTED ---
-    // The logic now ALWAYS combines complaints and suggestions to show the full list.
-    const allItemsForApproval = [...complaints, ...suggestions];
+    const allItemsForApproval = [...complaints, ...suggestions]; // Combine both lists
 
     if (allItemsForApproval.length > 0) {
         const hasCustomerResponded = approved.length > 0;
         
         allItemsForApproval.forEach(item => {
-            // This logic correctly checks which items were in the 'approved' list from the customer.
             const isChecked = hasCustomerResponded
                 ? approved.some(approvedItem => (approvedItem.text || approvedItem) === item.text)
                 : true;
@@ -2319,6 +2315,7 @@ function renderSuggestions(complaints = [], suggestions = [], approved = []) {
 
             const approvalItem = document.createElement('label');
             approvalItem.className = `flex items-center gap-3 p-3 ${bgColor} rounded-lg cursor-pointer hover:bg-gray-200`;
+            // THE CHANGE IS ON THE NEXT LINE: onchange now calls handleCheckboxChange(this)
             approvalItem.innerHTML = `
                 <input type="checkbox" class="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500" 
                        value=${checkboxValue} 
@@ -2340,38 +2337,44 @@ function renderSuggestions(complaints = [], suggestions = [], approved = []) {
 }
 
 
-       async function saveVehicleUpdate(shouldReset = true) {
-            if(!currentReportId) return showError('No report selected for update.');
 
-            const deliveryDate = document.getElementById('delivery-date').value;
-            if(!deliveryDate) return showError('Please select an expected delivery date.');
+      async function saveVehicleUpdate(shouldReset = true) {
+    if(!currentReportId) return showError('No report selected for update.');
 
-            const approvedItems = [];
-            document.querySelectorAll('#customer-approval-list input[type="checkbox"]:checked').forEach(checkbox => {
-                try {
-                    approvedItems.push(JSON.parse(checkbox.value));
-                } catch(e) { console.error("Could not parse approved item from checkbox", checkbox.value); }
-            });
+    const deliveryDate = document.getElementById('delivery-date').value;
+    if(!deliveryDate) return showError('Please select an expected delivery date.');
 
-            const allSuggestions = [...new Set(newSuggestions)];
+    const approvedItems = [];
+    document.querySelectorAll('#customer-approval-list input[type="checkbox"]:checked').forEach(checkbox => {
+        try {
+            approvedItems.push(JSON.parse(checkbox.value));
+        } catch(e) { console.error("Could not parse approved item from checkbox", checkbox.value); }
+    });
 
-            // The 'materials_required' line has been removed from this object
-            const updateData = {
-                complaint: JSON.stringify(originalComplaintsForUpdate), // KEY CHANGE: Save updated complaints
-                suggested: JSON.stringify(allSuggestions),
-                approved: JSON.stringify(approvedItems),
-                expected_delivery: deliveryDate,
-                status: 'Ongoing'
-            };
+    // Combine both original complaints and new suggestions into one complete list.
+    const allItemsForApproval = [
+        ...originalComplaintsForUpdate,
+        ...newSuggestions
+    ];
 
-            const { error } = await sb.from('reports').update(updateData).eq('id', currentReportId);
-            if(error) return showError(`Failed to save update: ${error.message}`);
+    // Create the data object to be saved in the database.
+    const updateData = {
+        complaint: JSON.stringify(originalComplaintsForUpdate),
+        // Save the COMBINED list to the 'suggested' column to preserve all items.
+        suggested: JSON.stringify(allItemsForApproval), 
+        approved: JSON.stringify(approvedItems),
+        expected_delivery: deliveryDate,
+        status: 'Ongoing'
+    };
 
-            showSuccessMessage('Update saved successfully!');
-            if (shouldReset) {
-                resetVehicleUpdateScreen();
-            }
-        }
+    const { error } = await sb.from('reports').update(updateData).eq('id', currentReportId);
+    if(error) return showError(`Failed to save update: ${error.message}`);
+
+    showSuccessMessage('Update saved successfully!');
+    if (shouldReset) {
+        resetVehicleUpdateScreen();
+    }
+}
 
                 
         // This new version combines all items and costs before creating the link.
@@ -2499,7 +2502,7 @@ async function sendApprovalLink() {
                             <p class="text-xs font-medium text-gray-500">${createdDate}</p>
                         </div>
                         <p class="text-sm text-gray-600 mt-1">${description}</p>
-                        <p class="text-xs text-gray-500 mt-1 break-all"><strong>Complaint:</strong> ${formatArrayCell(report.complaint)}</p>
+                        <p class="text-xs text-gray-500 mt-1 break-words"><strong>Complaint:</strong> ${formatArrayCell(report.complaint)}</p>
                     </div>
                     <div class="menu-container">
                         <button class="menu-button p-2 rounded-full hover:bg-gray-100">
@@ -2933,112 +2936,116 @@ async function sendApprovalLink() {
         }
 
 function selectReportForUpdate(report) {
-    hasCustomerApproval = false; // Reset flag for each new selection
-    const complaintsSection = document.getElementById('customer-complaints-update-section');
-    
-    // MODIFICATION REVERTED: This section no longer hides the complaint list based on the tab
-    complaintsSection.classList.remove('hidden');
+            hasCustomerApproval = false; // Reset flag for each new selection
+	    const complaintsSection = document.getElementById('customer-complaints-update-section');
+            const isResponsesTabActive = document.getElementById('tab-btn-responses').classList.contains('active-tab');
+
+            if (isResponsesTabActive) {
+                complaintsSection.classList.add('hidden');
+            } else {
+                complaintsSection.classList.remove('hidden');
+            }
             
-    document.getElementById('update-tab-container').classList.add('hidden');
-    
-    currentReportId = report.id;
-    
-    document.getElementById('update-detail-number').textContent = report.vehicles.vehicle_no;
-    updateDetailsSection.classList.remove('hidden');
-    updateFormSection.classList.remove('hidden');
+            document.getElementById('update-tab-container').classList.add('hidden');
+            
+            currentReportId = report.id;
+            
+            document.getElementById('update-detail-number').textContent = report.vehicles.vehicle_no;
+            updateDetailsSection.classList.remove('hidden');
+            updateFormSection.classList.remove('hidden');
 
-    try {
-        const suggestedItems = report.suggested ? JSON.parse(report.suggested) : null;
+        try {
+            const suggestedItems = report.suggested ? JSON.parse(report.suggested) : null;
 
-        if (suggestedItems && suggestedItems.length > 0) {
-            originalComplaintsForUpdate = suggestedItems.filter(item => item.type === 'complaint');
-            newSuggestions = suggestedItems.filter(item => item.type === 'suggestion');
-        } else {
-            let parsedComplaints = JSON.parse(report.complaint || '[]');
-            originalComplaintsForUpdate = parsedComplaints.map(c => 
-                typeof c === 'string' ? { text: c, amount: 0, type: 'complaint' } : c
-            );
+            if (suggestedItems && suggestedItems.length > 0) {
+                originalComplaintsForUpdate = suggestedItems.filter(item => item.type === 'complaint');
+                newSuggestions = suggestedItems.filter(item => item.type === 'suggestion');
+            } else {
+                let parsedComplaints = JSON.parse(report.complaint || '[]');
+                originalComplaintsForUpdate = parsedComplaints.map(c => 
+                    typeof c === 'string' ? { text: c, amount: 0, type: 'complaint' } : c
+                );
+                newSuggestions = [];
+            }
+        } catch (e) {
+            console.error("Error parsing complaint/suggestion data:", e);
+            originalComplaintsForUpdate = [];
             newSuggestions = [];
         }
-    } catch (e) {
-        console.error("Error parsing complaint/suggestion data:", e);
-        originalComplaintsForUpdate = [];
-        newSuggestions = [];
-    }
 
-    const approvedItems = report.approved ? JSON.parse(report.approved) : [];
-    
-    if (approvedItems && approvedItems.length > 0) {
-        hasCustomerApproval = true;
-    }
-    
-    // MODIFICATION REVERTED: The function call is restored to its original state
-    renderSuggestions(originalComplaintsForUpdate, newSuggestions, approvedItems);
-
-    const isResponseReceived = approvedItems && approvedItems.length > 0;
-    if (isResponseReceived) {
-        const totalAmountEl = document.getElementById('approx-total-amount');
-        let totalAmount = 0;
-        approvedItems.forEach(item => {
-            if (item && typeof item.amount === 'number') {
-                totalAmount += item.amount;
+            const approvedItems = report.approved ? JSON.parse(report.approved) : [];
+            
+            if (approvedItems && approvedItems.length > 0) {
+                hasCustomerApproval = true;
             }
-        });
-        totalAmountEl.textContent = `₹ ${totalAmount.toFixed(2)}`;
-    }
+            
+            renderSuggestions(originalComplaintsForUpdate, newSuggestions, approvedItems);
 
-    const complaintDisplayList = document.getElementById('original-complaints-list');
-    const complaintSummaryP = document.getElementById('update-detail-complaint');
-    const complaintDisplayDiv = document.getElementById('original-complaints-display');
-    complaintDisplayList.innerHTML = '';
+            const isResponseReceived = approvedItems && approvedItems.length > 0;
+            if (isResponseReceived) {
+                const totalAmountEl = document.getElementById('approx-total-amount');
+                let totalAmount = 0;
+                approvedItems.forEach(item => {
+                    if (item && typeof item.amount === 'number') {
+                        totalAmount += item.amount;
+                    }
+                });
+                totalAmountEl.textContent = `₹ ${totalAmount.toFixed(2)}`;
+            }
 
-    if (originalComplaintsForUpdate.length > 0) {
-        complaintSummaryP.textContent = `${originalComplaintsForUpdate.length} issue(s) registered.`;
-        originalComplaintsForUpdate.forEach(complaint => {
-            const li = document.createElement('li');
-            li.textContent = complaint.text;
-            li.classList.add('break-all');
-            complaintDisplayList.appendChild(li);
-        });
-        complaintDisplayDiv.classList.remove('hidden');
-    } else {
-        complaintSummaryP.textContent = 'No complaints registered.';
-        complaintDisplayDiv.classList.add('hidden');
-    }
+            const complaintDisplayList = document.getElementById('original-complaints-list');
+            const complaintSummaryP = document.getElementById('update-detail-complaint');
+            const complaintDisplayDiv = document.getElementById('original-complaints-display');
+            complaintDisplayList.innerHTML = '';
 
-    const feedbackDisplay = document.getElementById('customer-feedback-display');
-    const feedbackTextDisplay = document.getElementById('customer-feedback-text-display');
-    const feedbackAudioDisplay = document.getElementById('customer-feedback-audio-display');
+            if (originalComplaintsForUpdate.length > 0) {
+                complaintSummaryP.textContent = `${originalComplaintsForUpdate.length} issue(s) registered.`;
+                originalComplaintsForUpdate.forEach(complaint => {
+                    const li = document.createElement('li');
+                    li.textContent = complaint.text;
+					li.classList.add('break-all');
+                    complaintDisplayList.appendChild(li);
+                });
+                complaintDisplayDiv.classList.remove('hidden');
+            } else {
+                complaintSummaryP.textContent = 'No complaints registered.';
+                complaintDisplayDiv.classList.add('hidden');
+            }
 
-    feedbackDisplay.classList.add('hidden');
-    feedbackTextDisplay.classList.add('hidden');
-    feedbackAudioDisplay.classList.add('hidden');
-    feedbackTextDisplay.textContent = '';
-    feedbackAudioDisplay.innerHTML = '';
+            const feedbackDisplay = document.getElementById('customer-feedback-display');
+            const feedbackTextDisplay = document.getElementById('customer-feedback-text-display');
+            const feedbackAudioDisplay = document.getElementById('customer-feedback-audio-display');
 
-    if (report.customer_feedback_text || report.customer_feedback_audio) {
-        feedbackDisplay.classList.remove('hidden');
-        if (report.customer_feedback_text) {
-            feedbackTextDisplay.textContent = report.customer_feedback_text;
-            feedbackTextDisplay.classList.remove('hidden');
+            feedbackDisplay.classList.add('hidden');
+            feedbackTextDisplay.classList.add('hidden');
+            feedbackAudioDisplay.classList.add('hidden');
+            feedbackTextDisplay.textContent = '';
+            feedbackAudioDisplay.innerHTML = '';
+
+            if (report.customer_feedback_text || report.customer_feedback_audio) {
+                feedbackDisplay.classList.remove('hidden');
+                if (report.customer_feedback_text) {
+                    feedbackTextDisplay.textContent = report.customer_feedback_text;
+                    feedbackTextDisplay.classList.remove('hidden');
+                }
+                if (report.customer_feedback_audio) {
+                    feedbackAudioDisplay.innerHTML = `<audio controls src="${report.customer_feedback_audio}" class="w-full"></audio>`;
+                    feedbackAudioDisplay.classList.remove('hidden');
+                }
+            }
+
+            document.getElementById('delivery-date').value = report.expected_delivery || '';
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('delivery-date').setAttribute('min', today);
+
+            const whatsappButton = document.getElementById('send-whatsapp-btn');
+            if (report.approved && report.approved !== '[]') {
+                whatsappButton.style.display = 'none';
+            } else {
+                whatsappButton.style.display = 'flex';
+            }
         }
-        if (report.customer_feedback_audio) {
-            feedbackAudioDisplay.innerHTML = `<audio controls src="${report.customer_feedback_audio}" class="w-full"></audio>`;
-            feedbackAudioDisplay.classList.remove('hidden');
-        }
-    }
 
-    document.getElementById('delivery-date').value = report.expected_delivery || '';
-    const today = new Date().toISOString().split('T')[0];
-    document.getElementById('delivery-date').setAttribute('min', today);
-
-    const whatsappButton = document.getElementById('send-whatsapp-btn');
-    if (report.approved && report.approved !== '[]') {
-        whatsappButton.style.display = 'none';
-    } else {
-        whatsappButton.style.display = 'flex';
-    }
-}    
         function selectReportForUpdateById(reportId) {
             const report = updateableReportsStore[reportId];
             if (report) {
