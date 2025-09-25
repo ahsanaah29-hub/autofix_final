@@ -1777,23 +1777,21 @@ async function populateWashPendingJobs() {
                 const card = document.createElement('div');
                 card.className = 'p-4 border border-gray-200 rounded-lg job-card-item';
                 card.innerHTML = `
-    <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
+    <div class="flex justify-between items-center">
         <div>
             <p class="font-bold text-gray-800">${report.vehicles.vehicle_no}</p>
             <p class="text-sm text-gray-600">${report.vehicles.vehicle_name || ''}</p>
         </div>
-        <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-            <button onclick="sendToWash(${report.id})" class="btn-primary !w-full sm:!w-auto !py-1.5 !px-3 text-sm">
-                <span class="material-symbols-outlined !text-base">local_car_wash</span> 
-                <span class="hidden sm:inline">Send to Wash</span>
-                <span class="sm:hidden">Wash</span>
+        <div class="flex items-center gap-1">
+            <button onclick="sendToWash(${report.id})" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-1 px-2 rounded text-xs">
+                Wash
             </button>
-            <button onclick="markCompletedDirectly(${report.id}, '${report.vehicles.vehicle_no}')" class="btn-secondary !w-full sm:!w-auto !py-1.5 !px-3 text-sm">
-                <span class="material-symbols-outlined !text-base">check_circle</span>
-                <span>Complete</span>
+            <button onclick="markCompletedDirectly(${report.id}, '${report.vehicles.vehicle_no}')" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-1 px-2 rounded text-xs">
+                Complete
             </button>
         </div>
     </div>
+`;
                 `;
                 listContainer.appendChild(card);
             });
