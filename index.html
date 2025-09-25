@@ -1782,11 +1782,11 @@ async function populateWashPendingJobs() {
             <p class="font-bold text-gray-800">${report.vehicles.vehicle_no}</p>
             <p class="text-sm text-gray-600">${report.vehicles.vehicle_name || ''}</p>
         </div>
-        <div class="flex items-center gap-1">
-            <button onclick="sendToWash(${report.id})" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-1 px-2 rounded text-xs">
+        <div class="flex items-center gap-2">
+            <button onclick="sendToWash(${report.id})" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-1.5 px-3 rounded text-sm">
                 Wash
             </button>
-            <button onclick="markCompletedDirectly(${report.id}, '${report.vehicles.vehicle_no}')" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-1 px-2 rounded text-xs">
+            <button onclick="markCompletedDirectly(${report.id}, '${report.vehicles.vehicle_no}')" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-1.5 px-3 rounded text-sm">
                 Complete
             </button>
         </div>
