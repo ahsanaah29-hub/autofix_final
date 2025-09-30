@@ -3739,27 +3739,43 @@ async function sendApprovalLink() {
     }
 
     try {
-        // 1. Give the user immediate feedback that something is happening.
         showSuccessMessage('Saving and preparing link...');
 
-        // 2. Combine and save all required data to the database first.
+        // FIXED: Gather the amounts that the executive entered for each complaint
+        const updatedComplaints = [];
+        originalComplaintsForUpdate.forEach(complaint => {
+            const input = document.querySelector(`input[data-text="${complaint.text.replace(/"/g, '&quot;').replace(/'/g, '&#39;')}"]`);
+            if (input) {
+                updatedComplaints.push({
+                    text: complaint.text,
+                    amount: parseFloat(input.value) || 0,
+                    type: 'complaint'
+                });
+            } else {
+                updatedComplaints.push(complaint);
+            }
+        });
+
+        // Combine updated complaints with new suggestions
         const allItemsForApproval = [
-            ...originalComplaintsForUpdate,
+            ...updatedComplaints,
             ...newSuggestions
         ];
+
+        // Save the complete list with amounts to the database
         const { error: saveDataError } = await sb.from('reports')
             .update({
-                suggested: JSON.stringify(allItemsForApproval),
+                complaint: JSON.stringify(updatedComplaints), // Save updated complaints
+                suggested: JSON.stringify(allItemsForApproval), // Save complete list
                 status: 'Ongoing'
             })
             .eq('id', currentReportId);
 
         if (saveDataError) {
-            // If saving fails, stop here and show an error.
             throw saveDataError;
         }
 
-        // 3. Fetch the report data again to get the client's phone number.
+        // Fetch the report data to get client's phone number
         const { data: reportData, error: reportError } = await sb
             .from('reports')
             .select('client_phone, vehicles(*)')
@@ -3770,32 +3786,27 @@ async function sendApprovalLink() {
             throw reportError;
         }
 
-        // 4. Explicitly check if a phone number exists.
         const clientPhone = reportData.client_phone || reportData.vehicles?.client_phone;
         if (!clientPhone) {
-            // This is a clear error message instead of getting stuck.
             return showError("Cannot send: Client phone number is missing for this job card.");
         }
 
-        // 5. Construct the final URL.
+        // Construct and send the WhatsApp link
         const approvalUrl = `${window.location.origin}${window.location.pathname}?report_id=${currentReportId}`;
         const messageText = `Dear Customer,\n\nPlease review and approve the suggested repairs for your vehicle using the link below:\n${approvalUrl}\n\nThank you,\nAutoFix Service`;
         const encodedText = encodeURIComponent(messageText);
         const whatsappUrl = `https://wa.me/91${clientPhone}?text=${encodedText}`;
 
-        // 6. **THE FIX:** Use window.location.href for better mobile compatibility.
         window.location.href = whatsappUrl;
 
         showSuccessMessage("Approval link sent! Job moved to 'Awaiting Response'.");
         resetVehicleUpdateScreen();
 
     } catch (error) {
-        // This will catch any error from the steps above.
         console.error('Error in sendApprovalLink:', error);
         showError(`An error occurred: ${error.message}`);
     }
 }
-
 
         async function populateNotStartedJobs() {
             if (!currentUser) {
@@ -4624,15 +4635,15 @@ function showError(message, errorObject = null) {
         // --- Customer Approval Flow ---
        // This new version correctly displays all items and costs for the customer.
 // This new version correctly displays all items and costs for the customer.
-       async function loadApprovalScreen(reportId) {
+     async function loadApprovalScreen(reportId) {
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('admin-screens').style.display = 'none';
     document.getElementById('executive-screens').style.display = 'none';
     document.getElementById('customer-approval-screen').classList.add('active-screen');
 
-    // FIXED: Now fetching BOTH complaint and suggested columns
+    // Fetch the suggested column which now contains the complete list with amounts
     const { data: report, error } = await sb.from('reports')
-        .select(`complaint, suggested, approved, vehicles ( vehicle_no )`)
+        .select(`suggested, approved, vehicles ( vehicle_no )`)
         .eq('id', reportId)
         .single();
 
@@ -4655,19 +4666,8 @@ function showError(message, errorObject = null) {
         const suggestionsList = document.getElementById('approval-suggestions-list');
         suggestionsList.innerHTML = '';
         try {
-            // FIXED: Build the complete list from BOTH columns
-            let allItems = [];
-            
-            // First, get items from the 'suggested' column if it exists
-            if (report.suggested && report.suggested !== '[]') {
-                allItems = JSON.parse(report.suggested);
-            } else {
-                // Fallback: if 'suggested' is empty, use 'complaint' column
-                const complaints = JSON.parse(report.complaint || '[]');
-                allItems = complaints.map(c => 
-                    typeof c === 'string' ? { text: c, amount: 0, type: 'complaint' } : c
-                );
-            }
+            // Get all items from the 'suggested' column
+            const allItems = JSON.parse(report.suggested || '[]');
 
             if (allItems.length > 0) {
                 allItems.forEach(item => {
@@ -4694,7 +4694,7 @@ function showError(message, errorObject = null) {
                     suggestionsList.appendChild(label);
                 });
             } else {
-                suggestionsList.innerHTML = '<p class="text-sm text-gray-500">No specific repairs were suggested.</p>';
+                suggestionsList.innerHTML = '<p class="text-sm text-gray-500">Please wait for the executive to add repair details.</p>';
             }
         } catch (e) {
             console.error("Error parsing items for approval:", e);
