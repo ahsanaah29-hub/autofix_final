@@ -623,7 +623,7 @@
         <!-- This group contains the amount and button, and will appear below the input on small screens -->
         <div class="flex items-center justify-end gap-2 shrink-0">
             <label for="suggestion-amount-input" class="font-bold text-gray-500">₹</label>
-            <input id="suggestion-amount-input" type="number" class="form-input !py-1 !px-2 w-24 text-right" placeholder="Cost" oninput="recalculateAndUpdateTotal()">
+            <input id="suggestion-amount-input" type="number" class="form-input !py-1 !px-2 w-24 text-right" placeholder="Cost">
             <button type="button" onclick="addSuggestion()" class="p-2 bg-blue-100 text-blue-600 rounded-full hover:bg-blue-200">
                 <span class="material-symbols-outlined">add</span>
             </button>
@@ -3143,75 +3143,67 @@ function updateCustomerTotal() {
 }
 // ADD THIS NEW FUNCTION
 // Updates the cost of a complaint in the state array when the executive types in the input field.
-// REPLACE your existing updateComplaintCost function with this one
-
 function updateComplaintCost(text, newAmount) {
-    const parsedAmount = parseFloat(newAmount) || 0;
-
-    // 1. Update the cost in the main data array
     const complaint = originalComplaintsForUpdate.find(c => c.text === text);
     if (complaint) {
-        complaint.amount = parsedAmount;
+        complaint.amount = parseFloat(newAmount) || 0;
     }
-
-    // 2. Update the grand total at the bottom of the page
     recalculateAndUpdateTotal();
-
-    // 3. Find the specific cost display in the approval list and update it
-    const sanitizedIdText = text.replace(/[^a-zA-Z0-9]/g, '-');
-    const amountSpan = document.getElementById(`approval-amount-${sanitizedIdText}`);
-
-    if (amountSpan) {
-        amountSpan.textContent = `₹${parsedAmount.toFixed(2)}`;
-    }
 }
 
 // ADD THIS NEW FUNCTION
 // Calculates the total cost from both original complaints and new suggestions and updates the UI.
-// REPLACE your existing recalculateAndUpdateTotal function with this one
-
-
-
-// REPLACE your existing recalculateAndUpdateTotal function with this one
-
 function recalculateAndUpdateTotal() {
     const totalAmountEl = document.getElementById('approx-total-amount');
     let totalAmount = 0;
-
-    // 1. Sum all amounts from the original customer complaints list
-    if (originalComplaintsForUpdate && Array.isArray(originalComplaintsForUpdate)) {
-        originalComplaintsForUpdate.forEach(item => {
-            totalAmount += item.amount || 0;
-        });
-    }
-
-    // 2. Sum all amounts from the list of already-added mechanic suggestions
-    if (newSuggestions && Array.isArray(newSuggestions)) {
-        newSuggestions.forEach(item => {
-            totalAmount += item.amount || 0;
-        });
-    }
-    
-    // 3. Add the amount currently being typed for the new suggestion
-    const pendingSuggestionAmountInput = document.getElementById('suggestion-amount-input');
-    if (pendingSuggestionAmountInput) {
-        const pendingAmount = parseFloat(pendingSuggestionAmountInput.value) || 0;
-        totalAmount += pendingAmount;
-    }
-
-    // 4. Update the total amount display
+    // Find all checked checkboxes in the list and sum their values
+    document.querySelectorAll('#customer-approval-list input[type="checkbox"]:checked').forEach(checkbox => {
+        try {
+            // The checkbox value is a stringified JSON object, so we parse it
+            const item = JSON.parse(checkbox.value);
+            if (item && typeof item.amount === 'number') {
+                totalAmount += item.amount;
+            }
+        } catch (e) {
+            console.error("Could not parse checkbox value for total calculation:", checkbox.value);
+        }
+    });
     totalAmountEl.textContent = `₹ ${totalAmount.toFixed(2)}`;
 }
-// REPLACE your existing renderSuggestions function with this new, unified version
-
-// REPLACE your existing renderSuggestions function with this new, unified version
 
 function renderSuggestions(complaints = [], suggestions = [], approved = []) {
     const executiveList = document.getElementById('executive-suggestions-list');
+    const customerComplaintsList = document.getElementById('customer-complaints-list');
     const customerApprovalList = document.getElementById('customer-approval-list');
+
+    // ADD THIS LINE: Check which tab is currently active.
     const isPendingTabActive = document.getElementById('tab-btn-pending').classList.contains('active-tab');
 
-    // Render NEW mechanic suggestions with a delete button
+    // 1. Render editable customer complaints
+    customerComplaintsList.innerHTML = '';
+    if (complaints.length > 0) {
+        complaints.forEach((item) => {
+            const sanitizedText = item.text.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+            const complaintItem = document.createElement('div');
+            complaintItem.className = 'flex items-center justify-between gap-3 p-3 bg-gray-100 rounded-lg';
+            complaintItem.innerHTML = `
+                <div class="flex-1">
+                    <span class="font-medium break-words">${item.text}</span>
+                </div>
+                <div class="flex items-center gap-1">
+                    <span class="font-bold text-gray-500">₹</span>
+                    <input type="number" class="form-input !py-1 !px-2 w-20 text-right" 
+                           value="${item.amount || 0}" placeholder="Cost"
+                           data-text="${sanitizedText}" oninput="updateComplaintCost(this.dataset.text, this.value)">
+                </div>
+            `;
+            customerComplaintsList.appendChild(complaintItem);
+        });
+    } else {
+        customerComplaintsList.innerHTML = '<p class="text-sm text-gray-500">No original complaints were registered.</p>';
+    }
+    
+    // 2. Render NEW mechanic suggestions
     executiveList.innerHTML = '';
     if (suggestions.length > 0) {
         suggestions.forEach((item, index) => {
@@ -3227,7 +3219,7 @@ function renderSuggestions(complaints = [], suggestions = [], approved = []) {
         });
     }
 
-    // Render the COMBINED list for the final approval checklist
+    // 3. Render the COMBINED list for the final approval checklist
     customerApprovalList.innerHTML = '';
     const allItemsForApproval = [...complaints, ...suggestions]; 
 
@@ -3241,51 +3233,83 @@ function renderSuggestions(complaints = [], suggestions = [], approved = []) {
 
             const checkboxValue = `'${JSON.stringify(item)}'`;
             const sanitizedText = item.text.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-            const isOriginalComplaint = item.type === 'complaint';
-
-            let costHtml = '';
-            let tagHtml = '';
-
-            if (isOriginalComplaint) {
-                tagHtml = `<span class="text-xs text-gray-500">(Customer Request)</span>`;
-                costHtml = `
-                    <div class="flex items-center gap-1">
-                        <span class="font-bold text-gray-500">₹</span>
-                        <input type="number" class="form-input !py-1 !px-2 w-20 text-right" 
-                               value="${item.amount || 0}" placeholder="Cost"
-                               data-text="${sanitizedText}" oninput="updateComplaintCost(this.dataset.text, this.value)">
-                    </div>
-                `;
-            } else {
-                tagHtml = `<span class="text-xs text-blue-600">(New Suggestion)</span>`;
-                costHtml = `<span class="font-bold text-gray-800">₹${(item.amount || 0).toFixed(2)}</span>`;
-            }
+            const materialsValue = item.materials || '';
             
-            const approvalItemContainer = document.createElement('div');
+            const isOriginalComplaint = item.type === 'complaint';
             const bgColor = isOriginalComplaint ? 'bg-gray-100' : 'bg-blue-50';
+            const tag = isOriginalComplaint 
+                ? `<span class="text-xs text-gray-500">(Customer Request)</span>` 
+                : `<span class="text-xs text-blue-600">(New Suggestion)</span>`;
+
+            const approvalItemContainer = document.createElement('div');
             approvalItemContainer.className = `p-3 ${bgColor} rounded-lg`;
 
-            approvalItemContainer.innerHTML = `
-                <div class="flex items-center gap-3">
-                    <label class="flex items-center gap-3 cursor-pointer flex-grow">
-                        <input type="checkbox" class="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500" 
-                               value=${checkboxValue} 
-                               ${isChecked ? 'checked' : ''}
-                               onchange="handleCheckboxChange(this)">
-                        
-                        <span class="font-medium break-words flex-1">${item.text}</span>
+            let materialsInputHtml = '';
+            
+            // MODIFIED THIS LINE: Added a check for 'isPendingTabActive'.
+            // The materials input will now only show if the customer has responded AND we are NOT on the pending tab.
+            // MODIFIED THIS LINE: Added a check for 'isPendingTabActive'.
+// The materials input will now only show if the customer has responded AND we are NOT on the pending tab.
+if (hasCustomerResponded && isChecked && !isPendingTabActive) {
+    // Parse existing materials into an array (split by comma or newline)
+    const existingMaterials = (item.materials || '').split(/[,\n]/).map(m => m.trim()).filter(m => m);
+    
+    materialsInputHtml = `
+        <div class="mt-2 pt-2 border-t border-gray-300/50">
+            <div class="flex items-center justify-between mb-1">
+                <label class="block text-xs font-medium text-gray-600">Material Requirements</label>
+                <button type="button" onclick="addMaterialField('${sanitizedText}')" class="p-1 bg-blue-100 text-blue-600 rounded-full hover:bg-blue-200 shrink-0">
+                    <span class="material-symbols-outlined text-sm">add</span>
+                </button>
+            </div>
+            <div id="materials-container-${sanitizedText.replace(/\s+/g, '-')}" class="space-y-1">
+                ${existingMaterials.length > 0 
+                    ? existingMaterials.map((material, index) => `
+                        <div class="flex items-center gap-2">
+                            <input type="text" class="form-input !py-1 !px-2 text-sm flex-1" 
+                                   value="${material}"
+                                   placeholder="e.g., Oil filter, 4L synthetic oil"
+                                   oninput="updateMaterialsFromInputs('${sanitizedText}')">
+                            <button type="button" onclick="removeMaterialField(this, '${sanitizedText}')" class="p-1 text-red-500 hover:text-red-700 shrink-0">
+                                <span class="material-symbols-outlined text-sm">remove</span>
+                            </button>
+                        </div>
+                      `).join('')
+                    : `
+                        <div class="flex items-center gap-2">
+                            <input type="text" class="form-input !py-1 !px-2 text-sm flex-1" 
+                                   value=""
+                                   placeholder="e.g., Oil filter, 4L synthetic oil"
+                                   oninput="updateMaterialsFromInputs('${sanitizedText}')">
+                            <button type="button" onclick="removeMaterialField(this, '${sanitizedText}')" class="p-1 text-red-500 hover:text-red-700 shrink-0">
+                                <span class="material-symbols-outlined text-sm">remove</span>
+                            </button>
+                        </div>
+                      `
+                }
+            </div>
+        </div>
+    `;
+}
 
-                    </label>
-                    <div class="flex items-center gap-2">
-                         ${costHtml}
-                         ${tagHtml}
+            approvalItemContainer.innerHTML = `
+                <label class="flex items-center gap-3 cursor-pointer">
+                    <input type="checkbox" class="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500" 
+                           value=${checkboxValue} 
+                           ${isChecked ? 'checked' : ''}
+                           onchange="handleCheckboxChange(this)">
+                    <div class="flex-1 flex justify-between items-center">
+                       <span class="font-medium break-all">${item.text}</span>
+                        <span class="font-bold text-gray-800">₹${(item.amount || 0).toFixed(2)}</span>
                     </div>
-                </div>
+                    ${tag}
+                </label>
+                ${materialsInputHtml}
             `;
             customerApprovalList.appendChild(approvalItemContainer);
         });
     } else {
-        customerApprovalList.innerHTML = '<p class="text-sm text-gray-500">Add mechanic suggestions to see them here for approval.</p>';
+        customerApprovalList.innerHTML = '<p class="text-sm text-gray-500">No complaints or suggestions available for approval.</p>';
     }
     
     recalculateAndUpdateTotal();
@@ -3709,55 +3733,36 @@ async function saveVehicleUpdate(shouldReset = true) {
 
                 
 // REPLACE this entire function
-
-// REPLACE this entire function in your tag
-
-// REPLACE your existing sendApprovalLink function with this complete version
-
+// REPLACE this entire function
 async function sendApprovalLink() {
     if (!currentReportId) {
         return showError('No report is currently selected.');
     }
 
-    // NEW: Check for delivery date before proceeding
-    const deliveryDate = document.getElementById('delivery-date').value;
-    if (!deliveryDate) {
-        return showError('Please select an Expected Delivery Date before sending for approval.');
-    }
-
     try {
-        showSuccessMessage('Saving all changes and preparing link...');
+        // 1. Give the user immediate feedback that something is happening.
+        showSuccessMessage('Saving and preparing link...');
 
-        // 1. Gather ALL data, just like the "Save Update" button does.
+        // 2. Combine both original complaints and new suggestions into ONE array. This is the critical step.
         const allItemsForApproval = [
             ...originalComplaintsForUpdate,
             ...newSuggestions
         ];
-
-        const approvedItems = [];
-        document.querySelectorAll('#customer-approval-list input[type="checkbox"]:checked').forEach(checkbox => {
-            try { approvedItems.push(JSON.parse(checkbox.value)); } catch (e) {}
-        });
-
-        // 2. Create a complete data object for the update.
-        const updateData = {
-            complaint: JSON.stringify(originalComplaintsForUpdate),
-            suggested: JSON.stringify(allItemsForApproval),
-            approved: JSON.stringify(approvedItems),
-            status: 'Ongoing',
-            expected_delivery: deliveryDate
-        };
-
-        // 3. Perform the complete save operation.
+        
+        // 3. Update the 'suggested' column with the complete, combined list.
         const { error: saveDataError } = await sb.from('reports')
-            .update(updateData)
+            .update({
+                suggested: JSON.stringify(allItemsForApproval), // Save the combined list here
+                status: 'Ongoing'
+            })
             .eq('id', currentReportId);
 
         if (saveDataError) {
-            throw saveDataError; // Stop if the complete save fails
+            // If saving fails, stop here and show an error.
+            throw saveDataError;
         }
 
-        // 4. Proceed with sending the link now that data is safely saved.
+        // 4. Fetch the report again to get the client's phone number for the WhatsApp link.
         const { data: reportData, error: reportError } = await sb
             .from('reports')
             .select('client_phone, vehicles(*)')
@@ -3768,11 +3773,13 @@ async function sendApprovalLink() {
             throw reportError;
         }
 
+        // 5. Explicitly check if a phone number exists.
         const clientPhone = reportData.client_phone || reportData.vehicles?.client_phone;
         if (!clientPhone) {
             return showError("Cannot send: Client phone number is missing for this job card.");
         }
 
+        // 6. Construct the final URL and redirect the user to WhatsApp.
         const approvalUrl = `${window.location.origin}${window.location.pathname}?report_id=${currentReportId}`;
         const messageText = `Dear Customer,\n\nPlease review and approve the suggested repairs for your vehicle using the link below:\n${approvalUrl}\n\nThank you,\nAutoFix Service`;
         const encodedText = encodeURIComponent(messageText);
@@ -4616,14 +4623,14 @@ function showError(message, errorObject = null) {
         // --- Customer Approval Flow ---
        // This new version correctly displays all items and costs for the customer.
 // This new version correctly displays all items and costs for the customer.
-        // REPLACE this entire function
+        // This new version correctly displays all items and costs for the customer.
 async function loadApprovalScreen(reportId) {
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('admin-screens').style.display = 'none';
     document.getElementById('executive-screens').style.display = 'none';
     document.getElementById('customer-approval-screen').classList.add('active-screen');
 
-    // Fetch the report, specifically selecting the 'suggested' column
+    // This query correctly selects the 'suggested' column.
     const { data: report, error } = await sb.from('reports')
         .select(`suggested, approved, vehicles ( vehicle_no )`)
         .eq('id', reportId)
@@ -4637,7 +4644,6 @@ async function loadApprovalScreen(reportId) {
 
     document.getElementById('approval-vehicle-no').textContent = report.vehicles.vehicle_no;
 
-    // Check if a response was already submitted
     if (report.approved && report.approved !== '[]') {
         document.getElementById('approval-content').classList.add('hidden');
         const successMsg = document.getElementById('approval-success-message');
@@ -4649,7 +4655,7 @@ async function loadApprovalScreen(reportId) {
         const suggestionsList = document.getElementById('approval-suggestions-list');
         suggestionsList.innerHTML = '';
         try {
-            // Parse the complete list from the 'suggested' column
+            // It parses the single 'suggested' column to get the complete list.
             const allItems = JSON.parse(report.suggested || '[]');
 
             if (allItems.length > 0) {
