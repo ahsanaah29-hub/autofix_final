@@ -3712,34 +3712,52 @@ async function saveVehicleUpdate(shouldReset = true) {
 
 // REPLACE this entire function in your tag
 
+// REPLACE your existing sendApprovalLink function with this complete version
+
 async function sendApprovalLink() {
     if (!currentReportId) {
         return showError('No report is currently selected.');
     }
 
-    try {
-        // Give the user immediate feedback
-        showSuccessMessage('Saving and preparing link...');
+    // NEW: Check for delivery date before proceeding
+    const deliveryDate = document.getElementById('delivery-date').value;
+    if (!deliveryDate) {
+        return showError('Please select an Expected Delivery Date before sending for approval.');
+    }
 
-        // **THE FIX IS HERE:** Corrected "originalComplactionsForUpdate" to "originalComplaintsForUpdate"
+    try {
+        showSuccessMessage('Saving all changes and preparing link...');
+
+        // 1. Gather ALL data, just like the "Save Update" button does.
         const allItemsForApproval = [
             ...originalComplaintsForUpdate,
             ...newSuggestions
         ];
-        
-        // Save the complete list to the 'suggested' column BEFORE proceeding
+
+        const approvedItems = [];
+        document.querySelectorAll('#customer-approval-list input[type="checkbox"]:checked').forEach(checkbox => {
+            try { approvedItems.push(JSON.parse(checkbox.value)); } catch (e) {}
+        });
+
+        // 2. Create a complete data object for the update.
+        const updateData = {
+            complaint: JSON.stringify(originalComplaintsForUpdate),
+            suggested: JSON.stringify(allItemsForApproval),
+            approved: JSON.stringify(approvedItems),
+            status: 'Ongoing',
+            expected_delivery: deliveryDate
+        };
+
+        // 3. Perform the complete save operation.
         const { error: saveDataError } = await sb.from('reports')
-            .update({
-                suggested: JSON.stringify(allItemsForApproval),
-                status: 'Ongoing'
-            })
+            .update(updateData)
             .eq('id', currentReportId);
 
         if (saveDataError) {
-            throw saveDataError; // Stop if saving fails
+            throw saveDataError; // Stop if the complete save fails
         }
 
-        // Fetch the report again to get the client's phone number
+        // 4. Proceed with sending the link now that data is safely saved.
         const { data: reportData, error: reportError } = await sb
             .from('reports')
             .select('client_phone, vehicles(*)')
@@ -3755,7 +3773,6 @@ async function sendApprovalLink() {
             return showError("Cannot send: Client phone number is missing for this job card.");
         }
 
-        // Construct and open the WhatsApp URL
         const approvalUrl = `${window.location.origin}${window.location.pathname}?report_id=${currentReportId}`;
         const messageText = `Dear Customer,\n\nPlease review and approve the suggested repairs for your vehicle using the link below:\n${approvalUrl}\n\nThank you,\nAutoFix Service`;
         const encodedText = encodeURIComponent(messageText);
