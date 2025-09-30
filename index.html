@@ -4669,28 +4669,29 @@ function showError(message, errorObject = null) {
     document.getElementById('executive-screens').style.display = 'none';
     document.getElementById('customer-approval-screen').classList.add('active-screen');
 
-    // Show loading message
     const suggestionsList = document.getElementById('approval-suggestions-list');
     suggestionsList.innerHTML = '<p class="text-center text-gray-500">Loading repair details...</p>';
 
     try {
-        // Fetch the suggested column which contains the complete list with amounts
-        const { data: report, error } = await sb.from('reports')
-            .select(`suggested, approved, vehicles ( vehicle_no )`)
+        // Fetch with explicit columns including the join
+        const { data: report, error } = await sb
+            .from('reports')
+            .select('id, suggested, approved, vehicles!inner(vehicle_no)')
             .eq('id', reportId)
             .single();
 
         if (error) {
-            suggestionsList.innerHTML = `<p class="text-center text-red-600">Database Error: ${error.message}</p>`;
+            // Show the actual error to help debug
+            suggestionsList.innerHTML = `<p class="text-sm text-red-600">Database Error: ${error.message}<br><br>Report ID: ${reportId}</p>`;
             return;
         }
 
         if (!report) {
-            suggestionsList.innerHTML = '<p class="text-center text-red-600">Report not found. The link may be invalid.</p>';
+            suggestionsList.innerHTML = `<p class="text-sm text-red-600">Report not found.<br><br>Searched for ID: ${reportId}</p>`;
             return;
         }
 
-        document.getElementById('approval-vehicle-no').textContent = report.vehicles.vehicle_no;
+        document.getElementById('approval-vehicle-no').textContent = report.vehicles?.vehicle_no || 'Unknown';
 
         // Check if customer has already responded
         if (report.approved && report.approved !== '[]') {
@@ -4705,9 +4706,14 @@ function showError(message, errorObject = null) {
 
         suggestionsList.innerHTML = '';
         
-        // Check if suggested data exists
-        if (!report.suggested || report.suggested === '[]') {
-            suggestionsList.innerHTML = '<p class="text-sm text-gray-500">No repair details have been added yet. Please wait for the executive to send the approval link.</p>';
+        // Debug: Show what we received
+        if (!report.suggested) {
+            suggestionsList.innerHTML = `<p class="text-sm text-orange-600">Debug Info:<br>Suggested field is: ${report.suggested}<br>Type: ${typeof report.suggested}</p>`;
+            return;
+        }
+
+        if (report.suggested === '[]') {
+            suggestionsList.innerHTML = '<p class="text-sm text-gray-500">The executive has not added repair details yet.</p>';
             return;
         }
 
@@ -4716,17 +4722,17 @@ function showError(message, errorObject = null) {
         try {
             allItems = JSON.parse(report.suggested);
         } catch (parseError) {
-            suggestionsList.innerHTML = `<p class="text-center text-red-600">Error parsing data: ${parseError.message}</p>`;
+            suggestionsList.innerHTML = `<p class="text-sm text-red-600">Parse Error: ${parseError.message}<br><br>Data received: ${report.suggested?.substring(0, 100)}</p>`;
             return;
         }
 
-        if (!allItems || allItems.length === 0) {
-            suggestionsList.innerHTML = '<p class="text-sm text-gray-500">No repair items found. Please contact the service center.</p>';
+        if (!Array.isArray(allItems) || allItems.length === 0) {
+            suggestionsList.innerHTML = `<p class="text-sm text-gray-500">No items found.<br><br>Items type: ${typeof allItems}<br>Items: ${JSON.stringify(allItems)}</p>`;
             return;
         }
 
         // Render each item
-        allItems.forEach((item, index) => {
+        allItems.forEach((item) => {
             const isOriginalComplaint = item.type === 'complaint';
             const label = document.createElement('label');
             const bgColor = isOriginalComplaint ? 'bg-gray-100' : 'bg-blue-50';
@@ -4760,7 +4766,7 @@ function showError(message, errorObject = null) {
         updateCustomerTotal();
         
     } catch (error) {
-        suggestionsList.innerHTML = `<p class="text-center text-red-600">Unexpected error: ${error.message}</p>`;
+        suggestionsList.innerHTML = `<p class="text-sm text-red-600">Error: ${error.message}</p>`;
     }
 }
 
