@@ -1604,10 +1604,8 @@
 		
 
 function handleCheckboxChange(checkbox) {
-    // This helper function re-renders the list to show/hide the materials input correctly.
     const reRenderList = () => {
         const approvedItems = [];
-        // Get the current list of approved items directly from the checkboxes
         document.querySelectorAll('#customer-approval-list input[type="checkbox"]:checked').forEach(cb => {
             try { 
                 approvedItems.push(JSON.parse(cb.value)); 
@@ -1615,7 +1613,6 @@ function handleCheckboxChange(checkbox) {
                 console.error("Error parsing checkbox value on change:", e);
             }
         });
-        // Call the main render function with the current state and the new approved list
         renderSuggestions(originalComplaintsForUpdate, newSuggestions, approvedItems);
     };
 
@@ -1626,19 +1623,16 @@ function handleCheckboxChange(checkbox) {
 
         confirmBtn.onclick = () => {
             hideModal('change-confirmation-modal');
-            reRenderList(); // Re-render the list after user confirmation
+            reRenderList();
         };
         cancelBtn.onclick = () => {
-            checkbox.checked = !checkbox.checked; // Revert the checkbox if the user cancels
+            checkbox.checked = !checkbox.checked;
             hideModal('change-confirmation-modal');
         };
     } else {
-        reRenderList(); // If customer hasn't approved yet, just re-render directly
+        reRenderList();
     }
 }
-
-
-
 
         function handleRecordingToggle() {
             if (mediaRecorder && mediaRecorder.state === "recording") {
@@ -3114,7 +3108,6 @@ function executeAddSuggestion() {
     suggestionInput.focus();
 }
 
-
 // REPLACE the existing deleteSuggestion function
 function deleteSuggestion(index) {
     newSuggestions.splice(index, 1);
@@ -3158,28 +3151,27 @@ function updateComplaintCost(text, newAmount) {
 // Calculates the total cost from both original complaints and new suggestions and updates the UI.
 function recalculateAndUpdateTotal() {
     const totalAmountEl = document.getElementById('approx-total-amount');
+    if (!totalAmountEl) return;
+    
     let totalAmount = 0;
-    // Find all checked checkboxes in the list and sum their values
-    document.querySelectorAll('#customer-approval-list input[type="checkbox"]:checked').forEach(checkbox => {
-        try {
-            // The checkbox value is a stringified JSON object, so we parse it
-            const item = JSON.parse(checkbox.value);
-            if (item && typeof item.amount === 'number') {
-                totalAmount += item.amount;
-            }
-        } catch (e) {
-            console.error("Could not parse checkbox value for total calculation:", checkbox.value);
-        }
+    
+    // 1. Get amounts from customer complaint inputs
+    document.querySelectorAll('#customer-complaints-list input[type="number"]').forEach(input => {
+        totalAmount += parseFloat(input.value) || 0;
     });
+    
+    // 2. Get amounts from new mechanic suggestions
+    newSuggestions.forEach(suggestion => {
+        totalAmount += parseFloat(suggestion.amount) || 0;
+    });
+    
     totalAmountEl.textContent = `₹ ${totalAmount.toFixed(2)}`;
 }
-
 function renderSuggestions(complaints = [], suggestions = [], approved = []) {
     const executiveList = document.getElementById('executive-suggestions-list');
     const customerComplaintsList = document.getElementById('customer-complaints-list');
     const customerApprovalList = document.getElementById('customer-approval-list');
 
-    // ADD THIS LINE: Check which tab is currently active.
     const isPendingTabActive = document.getElementById('tab-btn-pending').classList.contains('active-tab');
 
     // 1. Render editable customer complaints
@@ -3197,7 +3189,8 @@ function renderSuggestions(complaints = [], suggestions = [], approved = []) {
                     <span class="font-bold text-gray-500">₹</span>
                     <input type="number" class="form-input !py-1 !px-2 w-20 text-right" 
                            value="${item.amount || 0}" placeholder="Cost"
-                           data-text="${sanitizedText}" oninput="updateComplaintCost(this.dataset.text, this.value)">
+                           data-text="${sanitizedText}" 
+                           oninput="updateComplaintCost(this.dataset.text, this.value); recalculateAndUpdateTotal();">
                 </div>
             `;
             customerComplaintsList.appendChild(complaintItem);
@@ -3249,51 +3242,46 @@ function renderSuggestions(complaints = [], suggestions = [], approved = []) {
 
             let materialsInputHtml = '';
             
-            // MODIFIED THIS LINE: Added a check for 'isPendingTabActive'.
-            // The materials input will now only show if the customer has responded AND we are NOT on the pending tab.
-            // MODIFIED THIS LINE: Added a check for 'isPendingTabActive'.
-// The materials input will now only show if the customer has responded AND we are NOT on the pending tab.
-if (hasCustomerResponded && isChecked && !isPendingTabActive) {
-    // Parse existing materials into an array (split by comma or newline)
-    const existingMaterials = (item.materials || '').split(/[,\n]/).map(m => m.trim()).filter(m => m);
-    
-    materialsInputHtml = `
-        <div class="mt-2 pt-2 border-t border-gray-300/50">
-            <div class="flex items-center justify-between mb-1">
-                <label class="block text-xs font-medium text-gray-600">Material Requirements</label>
-                <button type="button" onclick="addMaterialField('${sanitizedText}')" class="p-1 bg-blue-100 text-blue-600 rounded-full hover:bg-blue-200 shrink-0">
-                    <span class="material-symbols-outlined text-sm">add</span>
-                </button>
-            </div>
-            <div id="materials-container-${sanitizedText.replace(/\s+/g, '-')}" class="space-y-1">
-                ${existingMaterials.length > 0 
-                    ? existingMaterials.map((material, index) => `
-                        <div class="flex items-center gap-2">
-                            <input type="text" class="form-input !py-1 !px-2 text-sm flex-1" 
-                                   value="${material}"
-                                   placeholder="e.g., Oil filter, 4L synthetic oil"
-                                   oninput="updateMaterialsFromInputs('${sanitizedText}')">
-                            <button type="button" onclick="removeMaterialField(this, '${sanitizedText}')" class="p-1 text-red-500 hover:text-red-700 shrink-0">
-                                <span class="material-symbols-outlined text-sm">remove</span>
+            if (hasCustomerResponded && isChecked && !isPendingTabActive) {
+                const existingMaterials = (item.materials || '').split(/[,\n]/).map(m => m.trim()).filter(m => m);
+                
+                materialsInputHtml = `
+                    <div class="mt-2 pt-2 border-t border-gray-300/50">
+                        <div class="flex items-center justify-between mb-1">
+                            <label class="block text-xs font-medium text-gray-600">Material Requirements</label>
+                            <button type="button" onclick="addMaterialField('${sanitizedText}')" class="p-1 bg-blue-100 text-blue-600 rounded-full hover:bg-blue-200 shrink-0">
+                                <span class="material-symbols-outlined text-sm">add</span>
                             </button>
                         </div>
-                      `).join('')
-                    : `
-                        <div class="flex items-center gap-2">
-                            <input type="text" class="form-input !py-1 !px-2 text-sm flex-1" 
-                                   value=""
-                                   placeholder="e.g., Oil filter, 4L synthetic oil"
-                                   oninput="updateMaterialsFromInputs('${sanitizedText}')">
-                            <button type="button" onclick="removeMaterialField(this, '${sanitizedText}')" class="p-1 text-red-500 hover:text-red-700 shrink-0">
-                                <span class="material-symbols-outlined text-sm">remove</span>
-                            </button>
+                        <div id="materials-container-${sanitizedText.replace(/\s+/g, '-')}" class="space-y-1">
+                            ${existingMaterials.length > 0 
+                                ? existingMaterials.map((material, index) => `
+                                    <div class="flex items-center gap-2">
+                                        <input type="text" class="form-input !py-1 !px-2 text-sm flex-1" 
+                                               value="${material}"
+                                               placeholder="e.g., Oil filter, 4L synthetic oil"
+                                               oninput="updateMaterialsFromInputs('${sanitizedText}')">
+                                        <button type="button" onclick="removeMaterialField(this, '${sanitizedText}')" class="p-1 text-red-500 hover:text-red-700 shrink-0">
+                                            <span class="material-symbols-outlined text-sm">remove</span>
+                                        </button>
+                                    </div>
+                                  `).join('')
+                                : `
+                                    <div class="flex items-center gap-2">
+                                        <input type="text" class="form-input !py-1 !px-2 text-sm flex-1" 
+                                               value=""
+                                               placeholder="e.g., Oil filter, 4L synthetic oil"
+                                               oninput="updateMaterialsFromInputs('${sanitizedText}')">
+                                        <button type="button" onclick="removeMaterialField(this, '${sanitizedText}')" class="p-1 text-red-500 hover:text-red-700 shrink-0">
+                                            <span class="material-symbols-outlined text-sm">remove</span>
+                                        </button>
+                                    </div>
+                                  `
+                            }
                         </div>
-                      `
-                }
-            </div>
-        </div>
-    `;
-}
+                    </div>
+                `;
+            }
 
             approvalItemContainer.innerHTML = `
                 <label class="flex items-center gap-3 cursor-pointer">
@@ -3315,6 +3303,7 @@ if (hasCustomerResponded && isChecked && !isPendingTabActive) {
         customerApprovalList.innerHTML = '<p class="text-sm text-gray-500">No complaints or suggestions available for approval.</p>';
     }
     
+    // ADD THIS LINE AT THE END
     recalculateAndUpdateTotal();
 }
 function addMaterialField(itemText) {
