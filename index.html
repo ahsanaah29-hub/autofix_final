@@ -3204,14 +3204,12 @@ function recalculateAndUpdateTotal() {
 }
 // REPLACE your existing renderSuggestions function with this new, unified version
 
+// REPLACE your existing renderSuggestions function with this new, unified version
+
 function renderSuggestions(complaints = [], suggestions = [], approved = []) {
     const executiveList = document.getElementById('executive-suggestions-list');
     const customerApprovalList = document.getElementById('customer-approval-list');
     const isPendingTabActive = document.getElementById('tab-btn-pending').classList.contains('active-tab');
-
-    // This part is no longer needed as the section has been deleted
-    // const customerComplaintsList = document.getElementById('customer-complaints-list');
-    // customerComplaintsList.innerHTML = ''; 
 
     // Render NEW mechanic suggestions with a delete button
     executiveList.innerHTML = '';
@@ -3248,7 +3246,6 @@ function renderSuggestions(complaints = [], suggestions = [], approved = []) {
             let costHtml = '';
             let tagHtml = '';
 
-            // ** NEW LOGIC: Display an INPUT for complaints, and TEXT for suggestions **
             if (isOriginalComplaint) {
                 tagHtml = `<span class="text-xs text-gray-500">(Customer Request)</span>`;
                 costHtml = `
@@ -3275,7 +3272,9 @@ function renderSuggestions(complaints = [], suggestions = [], approved = []) {
                                value=${checkboxValue} 
                                ${isChecked ? 'checked' : ''}
                                onchange="handleCheckboxChange(this)">
-                        <span class="font-medium break-all flex-1">${item.text}</span>
+                        
+                        <span class="font-medium break-words flex-1">${item.text}</span>
+
                     </label>
                     <div class="flex items-center gap-2">
                          ${costHtml}
@@ -4922,5 +4921,4 @@ document.addEventListener('DOMContentLoaded', async () => { // Make this async
     <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
 </body>
 </html>
-
 
