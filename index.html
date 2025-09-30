@@ -3296,7 +3296,7 @@ function renderSuggestions(complaints = [], suggestions = [], approved = []) {
                 <label class="flex items-center gap-3 cursor-pointer">
                     <input type="checkbox" class="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500" value=${checkboxValue} ${isChecked ? 'checked' : ''} onchange="handleCheckboxChange(this)">
                     <div class="flex-1 flex justify-between items-center">
-                       <span class="font-medium break-all">${item.text}</span>
+                       <span class="font-medium">${item.text}</span>
                         <span class="font-bold text-gray-800">₹${(item.amount || 0).toFixed(2)}</span>
                     </div>
                     ${tag}
