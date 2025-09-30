@@ -3130,6 +3130,8 @@ function deleteSuggestion(index) {
 }
 function updateCustomerTotal() {
     const totalAmountEl = document.getElementById('cust-total-amount');
+    if (!totalAmountEl) return;
+    
     let total = 0;
     document.querySelectorAll('#approval-suggestions-list input[type="checkbox"]:checked').forEach(checkbox => {
         try {
@@ -3139,9 +3141,8 @@ function updateCustomerTotal() {
             console.error('Error parsing checkbox value:', e);
         }
     });
-    if (totalAmountEl) {
-        totalAmountEl.textContent = `₹ ${total.toFixed(2)}`;
-    }
+    
+    totalAmountEl.textContent = `₹ ${total.toFixed(2)}`;
 }
 // ADD THIS NEW FUNCTION
 // Updates the cost of a complaint in the state array when the executive types in the input field.
@@ -3740,11 +3741,6 @@ async function sendApprovalLink() {
     }
 
     try {
-        // Check what data we have
-        alert(`Step 1: Starting process
-Original complaints: ${originalComplaintsForUpdate.length}
-New suggestions: ${newSuggestions.length}`);
-
         showSuccessMessage('Saving and preparing link...');
 
         // Gather the amounts that the executive entered for each complaint
@@ -3770,18 +3766,11 @@ New suggestions: ${newSuggestions.length}`);
             }
         });
 
-        // Show what we collected
-        alert(`Step 2: Collected data
-Updated complaints: ${updatedComplaints.length}
-First complaint amount: ${updatedComplaints[0]?.amount || 'none'}`);
-
         // Combine updated complaints with new suggestions
         const allItemsForApproval = [
             ...updatedComplaints,
             ...newSuggestions
         ];
-
-        alert(`Step 3: Total items to send: ${allItemsForApproval.length}`);
 
         // Validate that at least one item has been added
         if (allItemsForApproval.length === 0) {
@@ -3798,11 +3787,9 @@ First complaint amount: ${updatedComplaints[0]?.amount || 'none'}`);
             .eq('id', currentReportId);
 
         if (saveDataError) {
-            alert(`Database error: ${saveDataError.message}`);
+            console.error('Error saving to database:', saveDataError);
             throw saveDataError;
         }
-
-        alert('Step 4: Data saved successfully to database');
 
         // Fetch the report data to get client's phone number
         const { data: reportData, error: reportError } = await sb
@@ -3832,7 +3819,7 @@ First complaint amount: ${updatedComplaints[0]?.amount || 'none'}`);
         resetVehicleUpdateScreen();
 
     } catch (error) {
-        alert(`Error: ${error.message}`);
+        console.error('Error in sendApprovalLink:', error);
         showError(`An error occurred: ${error.message}`);
     }
 }
@@ -4663,7 +4650,7 @@ function showError(message, errorObject = null) {
         // --- Customer Approval Flow ---
        // This new version correctly displays all items and costs for the customer.
 // This new version correctly displays all items and costs for the customer.
-   async function loadApprovalScreen(reportId) {
+ async function loadApprovalScreen(reportId) {
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('admin-screens').style.display = 'none';
     document.getElementById('executive-screens').style.display = 'none';
@@ -4673,7 +4660,7 @@ function showError(message, errorObject = null) {
     suggestionsList.innerHTML = '<p class="text-center text-gray-500">Loading repair details...</p>';
 
     try {
-        // Fetch with explicit columns including the join
+        // Fetch the suggested column which contains the complete list with amounts
         const { data: report, error } = await sb
             .from('reports')
             .select('id, suggested, approved, vehicles!inner(vehicle_no)')
@@ -4681,13 +4668,13 @@ function showError(message, errorObject = null) {
             .single();
 
         if (error) {
-            // Show the actual error to help debug
-            suggestionsList.innerHTML = `<p class="text-sm text-red-600">Database Error: ${error.message}<br><br>Report ID: ${reportId}</p>`;
+            console.error('Error fetching report for approval:', error);
+            suggestionsList.innerHTML = '<p class="text-center text-red-600">Could not load report details. The link may be invalid or has expired.</p>';
             return;
         }
 
         if (!report) {
-            suggestionsList.innerHTML = `<p class="text-sm text-red-600">Report not found.<br><br>Searched for ID: ${reportId}</p>`;
+            suggestionsList.innerHTML = '<p class="text-center text-red-600">Report not found. The link may be invalid.</p>';
             return;
         }
 
@@ -4706,14 +4693,9 @@ function showError(message, errorObject = null) {
 
         suggestionsList.innerHTML = '';
         
-        // Debug: Show what we received
-        if (!report.suggested) {
-            suggestionsList.innerHTML = `<p class="text-sm text-orange-600">Debug Info:<br>Suggested field is: ${report.suggested}<br>Type: ${typeof report.suggested}</p>`;
-            return;
-        }
-
-        if (report.suggested === '[]') {
-            suggestionsList.innerHTML = '<p class="text-sm text-gray-500">The executive has not added repair details yet.</p>';
+        // Check if suggested data exists
+        if (!report.suggested || report.suggested === '[]') {
+            suggestionsList.innerHTML = '<p class="text-sm text-gray-500">The executive has not added repair details yet. Please wait for the approval link to be sent.</p>';
             return;
         }
 
@@ -4722,12 +4704,13 @@ function showError(message, errorObject = null) {
         try {
             allItems = JSON.parse(report.suggested);
         } catch (parseError) {
-            suggestionsList.innerHTML = `<p class="text-sm text-red-600">Parse Error: ${parseError.message}<br><br>Data received: ${report.suggested?.substring(0, 100)}</p>`;
+            console.error('Error parsing suggested items:', parseError);
+            suggestionsList.innerHTML = '<p class="text-center text-red-600">Error loading repair details. Please try again or contact support.</p>';
             return;
         }
 
         if (!Array.isArray(allItems) || allItems.length === 0) {
-            suggestionsList.innerHTML = `<p class="text-sm text-gray-500">No items found.<br><br>Items type: ${typeof allItems}<br>Items: ${JSON.stringify(allItems)}</p>`;
+            suggestionsList.innerHTML = '<p class="text-sm text-gray-500">No repair items found. Please contact the service center.</p>';
             return;
         }
 
@@ -4766,7 +4749,8 @@ function showError(message, errorObject = null) {
         updateCustomerTotal();
         
     } catch (error) {
-        suggestionsList.innerHTML = `<p class="text-sm text-red-600">Error: ${error.message}</p>`;
+        console.error('Unexpected error in loadApprovalScreen:', error);
+        suggestionsList.innerHTML = '<p class="text-center text-red-600">An unexpected error occurred. Please try again.</p>';
     }
 }
 
