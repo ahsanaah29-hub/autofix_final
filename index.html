@@ -3711,6 +3711,8 @@ async function saveVehicleUpdate(shouldReset = true) {
                 
 // REPLACE this entire function
 
+// REPLACE this entire function in your tag
+
 async function sendApprovalLink() {
     if (!currentReportId) {
         return showError('No report is currently selected.');
@@ -3720,7 +3722,7 @@ async function sendApprovalLink() {
         // Give the user immediate feedback
         showSuccessMessage('Saving and preparing link...');
 
-        // Combine original complaints and new suggestions into a single list
+        // **THE FIX IS HERE:** Corrected "originalComplactionsForUpdate" to "originalComplaintsForUpdate"
         const allItemsForApproval = [
             ...originalComplaintsForUpdate,
             ...newSuggestions
@@ -3770,7 +3772,6 @@ async function sendApprovalLink() {
         showError(`An error occurred: ${error.message}`);
     }
 }
-
 
         async function populateNotStartedJobs() {
             if (!currentUser) {
@@ -4921,4 +4922,5 @@ document.addEventListener('DOMContentLoaded', async () => { // Make this async
     <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
 </body>
 </html>
+
 
