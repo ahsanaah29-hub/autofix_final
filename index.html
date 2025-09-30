@@ -3733,7 +3733,6 @@ async function saveVehicleUpdate(shouldReset = true) {
 
                 
 // REPLACE this entire function
-// REPLACE this entire function
 async function sendApprovalLink() {
     if (!currentReportId) {
         return showError('No report is currently selected.');
@@ -3743,16 +3742,14 @@ async function sendApprovalLink() {
         // 1. Give the user immediate feedback that something is happening.
         showSuccessMessage('Saving and preparing link...');
 
-        // 2. Combine both original complaints and new suggestions into ONE array. This is the critical step.
+        // 2. Combine and save all required data to the database first.
         const allItemsForApproval = [
             ...originalComplaintsForUpdate,
             ...newSuggestions
         ];
-        
-        // 3. Update the 'suggested' column with the complete, combined list.
         const { error: saveDataError } = await sb.from('reports')
             .update({
-                suggested: JSON.stringify(allItemsForApproval), // Save the combined list here
+                suggested: JSON.stringify(allItemsForApproval),
                 status: 'Ongoing'
             })
             .eq('id', currentReportId);
@@ -3762,7 +3759,7 @@ async function sendApprovalLink() {
             throw saveDataError;
         }
 
-        // 4. Fetch the report again to get the client's phone number for the WhatsApp link.
+        // 3. Fetch the report data again to get the client's phone number.
         const { data: reportData, error: reportError } = await sb
             .from('reports')
             .select('client_phone, vehicles(*)')
@@ -3773,28 +3770,32 @@ async function sendApprovalLink() {
             throw reportError;
         }
 
-        // 5. Explicitly check if a phone number exists.
+        // 4. Explicitly check if a phone number exists.
         const clientPhone = reportData.client_phone || reportData.vehicles?.client_phone;
         if (!clientPhone) {
+            // This is a clear error message instead of getting stuck.
             return showError("Cannot send: Client phone number is missing for this job card.");
         }
 
-        // 6. Construct the final URL and redirect the user to WhatsApp.
+        // 5. Construct the final URL.
         const approvalUrl = `${window.location.origin}${window.location.pathname}?report_id=${currentReportId}`;
         const messageText = `Dear Customer,\n\nPlease review and approve the suggested repairs for your vehicle using the link below:\n${approvalUrl}\n\nThank you,\nAutoFix Service`;
         const encodedText = encodeURIComponent(messageText);
         const whatsappUrl = `https://wa.me/91${clientPhone}?text=${encodedText}`;
 
+        // 6. **THE FIX:** Use window.location.href for better mobile compatibility.
         window.location.href = whatsappUrl;
 
         showSuccessMessage("Approval link sent! Job moved to 'Awaiting Response'.");
         resetVehicleUpdateScreen();
 
     } catch (error) {
+        // This will catch any error from the steps above.
         console.error('Error in sendApprovalLink:', error);
         showError(`An error occurred: ${error.message}`);
     }
 }
+
 
         async function populateNotStartedJobs() {
             if (!currentUser) {
@@ -4623,16 +4624,15 @@ function showError(message, errorObject = null) {
         // --- Customer Approval Flow ---
        // This new version correctly displays all items and costs for the customer.
 // This new version correctly displays all items and costs for the customer.
-        // This new version correctly displays all items and costs for the customer.
-async function loadApprovalScreen(reportId) {
+       async function loadApprovalScreen(reportId) {
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('admin-screens').style.display = 'none';
     document.getElementById('executive-screens').style.display = 'none';
     document.getElementById('customer-approval-screen').classList.add('active-screen');
 
-    // This query correctly selects the 'suggested' column.
+    // FIXED: Now fetching BOTH complaint and suggested columns
     const { data: report, error } = await sb.from('reports')
-        .select(`suggested, approved, vehicles ( vehicle_no )`)
+        .select(`complaint, suggested, approved, vehicles ( vehicle_no )`)
         .eq('id', reportId)
         .single();
 
@@ -4655,11 +4655,22 @@ async function loadApprovalScreen(reportId) {
         const suggestionsList = document.getElementById('approval-suggestions-list');
         suggestionsList.innerHTML = '';
         try {
-            // It parses the single 'suggested' column to get the complete list.
-            const allItems = JSON.parse(report.suggested || '[]');
+            // FIXED: Build the complete list from BOTH columns
+            let allItems = [];
+            
+            // First, get items from the 'suggested' column if it exists
+            if (report.suggested && report.suggested !== '[]') {
+                allItems = JSON.parse(report.suggested);
+            } else {
+                // Fallback: if 'suggested' is empty, use 'complaint' column
+                const complaints = JSON.parse(report.complaint || '[]');
+                allItems = complaints.map(c => 
+                    typeof c === 'string' ? { text: c, amount: 0, type: 'complaint' } : c
+                );
+            }
 
             if (allItems.length > 0) {
-                 allItems.forEach(item => {
+                allItems.forEach(item => {
                     const isOriginalComplaint = item.type === 'complaint';
                     const label = document.createElement('label');
                     const bgColor = isOriginalComplaint ? 'bg-gray-100' : 'bg-blue-50';
@@ -4692,7 +4703,6 @@ async function loadApprovalScreen(reportId) {
         updateCustomerTotal();
     }
 }
-
 
         async function submitCustomerFeedback() {
     const params = new URLSearchParams(window.location.search);
