@@ -3743,11 +3743,18 @@ async function sendApprovalLink() {
     try {
         showSuccessMessage('Saving and preparing link...');
 
+        // DEBUG: Check what we're starting with
+        console.log('Original complaints:', originalComplaintsForUpdate);
+        console.log('New suggestions:', newSuggestions);
+
         // Gather the amounts that the executive entered for each complaint
         const updatedComplaints = [];
         originalComplaintsForUpdate.forEach(complaint => {
             const sanitizedText = complaint.text.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
             const input = document.querySelector(`input[data-text="${sanitizedText}"]`);
+            console.log('Looking for input with data-text:', sanitizedText);
+            console.log('Found input:', input);
+            
             if (input) {
                 updatedComplaints.push({
                     text: complaint.text,
@@ -3765,11 +3772,15 @@ async function sendApprovalLink() {
             }
         });
 
+        console.log('Updated complaints with amounts:', updatedComplaints);
+
         // Combine updated complaints with new suggestions
         const allItemsForApproval = [
             ...updatedComplaints,
             ...newSuggestions
         ];
+
+        console.log('All items being sent for approval:', allItemsForApproval);
 
         // Validate that at least one item has been added
         if (allItemsForApproval.length === 0) {
@@ -3786,8 +3797,11 @@ async function sendApprovalLink() {
             .eq('id', currentReportId);
 
         if (saveDataError) {
+            console.error('Error saving to database:', saveDataError);
             throw saveDataError;
         }
+
+        console.log('Successfully saved to database');
 
         // Fetch the report data to get client's phone number
         const { data: reportData, error: reportError } = await sb
@@ -3807,6 +3821,8 @@ async function sendApprovalLink() {
 
         // Construct and send the WhatsApp link
         const approvalUrl = `${window.location.origin}${window.location.pathname}?report_id=${currentReportId}`;
+        console.log('Approval URL:', approvalUrl);
+        
         const messageText = `Dear Customer,\n\nPlease review and approve the suggested repairs for your vehicle using the link below:\n${approvalUrl}\n\nThank you,\nAutoFix Service`;
         const encodedText = encodeURIComponent(messageText);
         const whatsappUrl = `https://wa.me/91${clientPhone}?text=${encodedText}`;
@@ -4648,7 +4664,9 @@ function showError(message, errorObject = null) {
         // --- Customer Approval Flow ---
        // This new version correctly displays all items and costs for the customer.
 // This new version correctly displays all items and costs for the customer.
-    async function loadApprovalScreen(reportId) {
+   async function loadApprovalScreen(reportId) {
+    console.log('Loading approval screen for report ID:', reportId);
+    
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('admin-screens').style.display = 'none';
     document.getElementById('executive-screens').style.display = 'none';
@@ -4659,6 +4677,9 @@ function showError(message, errorObject = null) {
         .select(`suggested, approved, vehicles ( vehicle_no )`)
         .eq('id', reportId)
         .single();
+
+    console.log('Fetched report data:', report);
+    console.log('Fetch error:', error);
 
     if (error || !report) {
         console.error('Error fetching report for approval:', error);
@@ -4681,11 +4702,18 @@ function showError(message, errorObject = null) {
         suggestionsList.innerHTML = '';
         
         try {
+            console.log('Raw suggested data:', report.suggested);
+            
             // Get all items from the 'suggested' column
             const allItems = JSON.parse(report.suggested || '[]');
+            
+            console.log('Parsed items:', allItems);
+            console.log('Number of items:', allItems.length);
 
             if (allItems.length > 0) {
-                allItems.forEach(item => {
+                allItems.forEach((item, index) => {
+                    console.log(`Processing item ${index}:`, item);
+                    
                     const isOriginalComplaint = item.type === 'complaint';
                     const label = document.createElement('label');
                     const bgColor = isOriginalComplaint ? 'bg-gray-100' : 'bg-blue-50';
@@ -4695,7 +4723,6 @@ function showError(message, errorObject = null) {
                     
                     const amountDisplay = `<span class="font-bold text-gray-800 shrink-0">₹${(item.amount || 0).toFixed(2)}</span>`;
                     
-                    // Properly escape the JSON for the checkbox value
                     const itemForCheckbox = {
                         text: item.text,
                         amount: item.amount || 0,
@@ -4716,7 +4743,10 @@ function showError(message, errorObject = null) {
                     `;
                     suggestionsList.appendChild(label);
                 });
+                
+                console.log('Successfully rendered', allItems.length, 'items');
             } else {
+                console.log('No items found in suggested column');
                 suggestionsList.innerHTML = '<p class="text-sm text-gray-500">Please wait for the executive to add repair details and send the approval link.</p>';
             }
         } catch (e) {
