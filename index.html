@@ -3734,26 +3734,24 @@ async function saveVehicleUpdate(shouldReset = true) {
 
 
                 
-// REPLACE this entire function
 async function sendApprovalLink() {
     if (!currentReportId) {
         return showError('No report is currently selected.');
     }
 
     try {
-        showSuccessMessage('Saving and preparing link...');
+        // Check what data we have
+        alert(`Step 1: Starting process
+Original complaints: ${originalComplaintsForUpdate.length}
+New suggestions: ${newSuggestions.length}`);
 
-        // DEBUG: Check what we're starting with
-        console.log('Original complaints:', originalComplaintsForUpdate);
-        console.log('New suggestions:', newSuggestions);
+        showSuccessMessage('Saving and preparing link...');
 
         // Gather the amounts that the executive entered for each complaint
         const updatedComplaints = [];
         originalComplaintsForUpdate.forEach(complaint => {
             const sanitizedText = complaint.text.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
             const input = document.querySelector(`input[data-text="${sanitizedText}"]`);
-            console.log('Looking for input with data-text:', sanitizedText);
-            console.log('Found input:', input);
             
             if (input) {
                 updatedComplaints.push({
@@ -3772,7 +3770,10 @@ async function sendApprovalLink() {
             }
         });
 
-        console.log('Updated complaints with amounts:', updatedComplaints);
+        // Show what we collected
+        alert(`Step 2: Collected data
+Updated complaints: ${updatedComplaints.length}
+First complaint amount: ${updatedComplaints[0]?.amount || 'none'}`);
 
         // Combine updated complaints with new suggestions
         const allItemsForApproval = [
@@ -3780,7 +3781,7 @@ async function sendApprovalLink() {
             ...newSuggestions
         ];
 
-        console.log('All items being sent for approval:', allItemsForApproval);
+        alert(`Step 3: Total items to send: ${allItemsForApproval.length}`);
 
         // Validate that at least one item has been added
         if (allItemsForApproval.length === 0) {
@@ -3797,11 +3798,11 @@ async function sendApprovalLink() {
             .eq('id', currentReportId);
 
         if (saveDataError) {
-            console.error('Error saving to database:', saveDataError);
+            alert(`Database error: ${saveDataError.message}`);
             throw saveDataError;
         }
 
-        console.log('Successfully saved to database');
+        alert('Step 4: Data saved successfully to database');
 
         // Fetch the report data to get client's phone number
         const { data: reportData, error: reportError } = await sb
@@ -3821,8 +3822,6 @@ async function sendApprovalLink() {
 
         // Construct and send the WhatsApp link
         const approvalUrl = `${window.location.origin}${window.location.pathname}?report_id=${currentReportId}`;
-        console.log('Approval URL:', approvalUrl);
-        
         const messageText = `Dear Customer,\n\nPlease review and approve the suggested repairs for your vehicle using the link below:\n${approvalUrl}\n\nThank you,\nAutoFix Service`;
         const encodedText = encodeURIComponent(messageText);
         const whatsappUrl = `https://wa.me/91${clientPhone}?text=${encodedText}`;
@@ -3833,7 +3832,7 @@ async function sendApprovalLink() {
         resetVehicleUpdateScreen();
 
     } catch (error) {
-        console.error('Error in sendApprovalLink:', error);
+        alert(`Error: ${error.message}`);
         showError(`An error occurred: ${error.message}`);
     }
 }
@@ -4665,96 +4664,103 @@ function showError(message, errorObject = null) {
        // This new version correctly displays all items and costs for the customer.
 // This new version correctly displays all items and costs for the customer.
    async function loadApprovalScreen(reportId) {
-    console.log('Loading approval screen for report ID:', reportId);
-    
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('admin-screens').style.display = 'none';
     document.getElementById('executive-screens').style.display = 'none';
     document.getElementById('customer-approval-screen').classList.add('active-screen');
 
-    // Fetch the suggested column which contains the complete list with amounts
-    const { data: report, error } = await sb.from('reports')
-        .select(`suggested, approved, vehicles ( vehicle_no )`)
-        .eq('id', reportId)
-        .single();
+    // Show loading message
+    const suggestionsList = document.getElementById('approval-suggestions-list');
+    suggestionsList.innerHTML = '<p class="text-center text-gray-500">Loading repair details...</p>';
 
-    console.log('Fetched report data:', report);
-    console.log('Fetch error:', error);
+    try {
+        // Fetch the suggested column which contains the complete list with amounts
+        const { data: report, error } = await sb.from('reports')
+            .select(`suggested, approved, vehicles ( vehicle_no )`)
+            .eq('id', reportId)
+            .single();
 
-    if (error || !report) {
-        console.error('Error fetching report for approval:', error);
-        document.getElementById('approval-content').innerHTML = '<p class="text-center text-red-600">Could not load report details. The link may be invalid or has expired.</p>';
-        return;
-    }
+        if (error) {
+            suggestionsList.innerHTML = `<p class="text-center text-red-600">Database Error: ${error.message}</p>`;
+            return;
+        }
 
-    document.getElementById('approval-vehicle-no').textContent = report.vehicles.vehicle_no;
+        if (!report) {
+            suggestionsList.innerHTML = '<p class="text-center text-red-600">Report not found. The link may be invalid.</p>';
+            return;
+        }
 
-    // Check if customer has already responded
-    if (report.approved && report.approved !== '[]') {
-        document.getElementById('approval-content').classList.add('hidden');
-        const successMsg = document.getElementById('approval-success-message');
-        successMsg.querySelector('h3').textContent = 'Response Already Submitted';
-        successMsg.querySelector('p').textContent = 'Thank you, we have already received your feedback for this service request.';
-        successMsg.classList.remove('hidden');
-        document.querySelector('#customer-approval-card h2').textContent = 'Response Received';
-    } else {
-        const suggestionsList = document.getElementById('approval-suggestions-list');
+        document.getElementById('approval-vehicle-no').textContent = report.vehicles.vehicle_no;
+
+        // Check if customer has already responded
+        if (report.approved && report.approved !== '[]') {
+            document.getElementById('approval-content').classList.add('hidden');
+            const successMsg = document.getElementById('approval-success-message');
+            successMsg.querySelector('h3').textContent = 'Response Already Submitted';
+            successMsg.querySelector('p').textContent = 'Thank you, we have already received your feedback for this service request.';
+            successMsg.classList.remove('hidden');
+            document.querySelector('#customer-approval-card h2').textContent = 'Response Received';
+            return;
+        }
+
         suggestionsList.innerHTML = '';
         
-        try {
-            console.log('Raw suggested data:', report.suggested);
-            
-            // Get all items from the 'suggested' column
-            const allItems = JSON.parse(report.suggested || '[]');
-            
-            console.log('Parsed items:', allItems);
-            console.log('Number of items:', allItems.length);
-
-            if (allItems.length > 0) {
-                allItems.forEach((item, index) => {
-                    console.log(`Processing item ${index}:`, item);
-                    
-                    const isOriginalComplaint = item.type === 'complaint';
-                    const label = document.createElement('label');
-                    const bgColor = isOriginalComplaint ? 'bg-gray-100' : 'bg-blue-50';
-                    const tag = isOriginalComplaint 
-                        ? `<span class="text-xs text-gray-500">(Your Request)</span>` 
-                        : `<span class="text-xs text-blue-600">(Mechanic Suggestion)</span>`;
-                    
-                    const amountDisplay = `<span class="font-bold text-gray-800 shrink-0">₹${(item.amount || 0).toFixed(2)}</span>`;
-                    
-                    const itemForCheckbox = {
-                        text: item.text,
-                        amount: item.amount || 0,
-                        type: item.type,
-                        materials: item.materials || ''
-                    };
-                    const checkboxValue = JSON.stringify(itemForCheckbox).replace(/"/g, '&quot;');
-
-                    label.className = `flex items-center gap-3 p-3 ${bgColor} rounded-lg cursor-pointer hover:bg-gray-200 transition-colors`;
-                    
-                    label.innerHTML = `
-                        <input type="checkbox" value="${checkboxValue}" class="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500" onchange="updateCustomerTotal()" checked>
-                        <div class="flex-1 flex justify-between items-center gap-3">
-                             <span class="text-sm font-medium break-words">${item.text}</span>
-                             ${amountDisplay}
-                        </div>
-                        ${tag}
-                    `;
-                    suggestionsList.appendChild(label);
-                });
-                
-                console.log('Successfully rendered', allItems.length, 'items');
-            } else {
-                console.log('No items found in suggested column');
-                suggestionsList.innerHTML = '<p class="text-sm text-gray-500">Please wait for the executive to add repair details and send the approval link.</p>';
-            }
-        } catch (e) {
-            console.error("Error parsing items for approval:", e);
-            suggestionsList.innerHTML = '<p class="text-sm text-red-500">Could not display repair details. Please contact support.</p>';
+        // Check if suggested data exists
+        if (!report.suggested || report.suggested === '[]') {
+            suggestionsList.innerHTML = '<p class="text-sm text-gray-500">No repair details have been added yet. Please wait for the executive to send the approval link.</p>';
+            return;
         }
+
+        // Parse the items
+        let allItems;
+        try {
+            allItems = JSON.parse(report.suggested);
+        } catch (parseError) {
+            suggestionsList.innerHTML = `<p class="text-center text-red-600">Error parsing data: ${parseError.message}</p>`;
+            return;
+        }
+
+        if (!allItems || allItems.length === 0) {
+            suggestionsList.innerHTML = '<p class="text-sm text-gray-500">No repair items found. Please contact the service center.</p>';
+            return;
+        }
+
+        // Render each item
+        allItems.forEach((item, index) => {
+            const isOriginalComplaint = item.type === 'complaint';
+            const label = document.createElement('label');
+            const bgColor = isOriginalComplaint ? 'bg-gray-100' : 'bg-blue-50';
+            const tag = isOriginalComplaint 
+                ? `<span class="text-xs text-gray-500">(Your Request)</span>` 
+                : `<span class="text-xs text-blue-600">(Mechanic Suggestion)</span>`;
+            
+            const amountDisplay = `<span class="font-bold text-gray-800 shrink-0">₹${(item.amount || 0).toFixed(2)}</span>`;
+            
+            const itemForCheckbox = {
+                text: item.text,
+                amount: item.amount || 0,
+                type: item.type,
+                materials: item.materials || ''
+            };
+            const checkboxValue = JSON.stringify(itemForCheckbox).replace(/"/g, '&quot;');
+
+            label.className = `flex items-center gap-3 p-3 ${bgColor} rounded-lg cursor-pointer hover:bg-gray-200 transition-colors`;
+            
+            label.innerHTML = `
+                <input type="checkbox" value="${checkboxValue}" class="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500" onchange="updateCustomerTotal()" checked>
+                <div class="flex-1 flex justify-between items-center gap-3">
+                     <span class="text-sm font-medium break-words">${item.text}</span>
+                     ${amountDisplay}
+                </div>
+                ${tag}
+            `;
+            suggestionsList.appendChild(label);
+        });
         
         updateCustomerTotal();
+        
+    } catch (error) {
+        suggestionsList.innerHTML = `<p class="text-center text-red-600">Unexpected error: ${error.message}</p>`;
     }
 }
 
