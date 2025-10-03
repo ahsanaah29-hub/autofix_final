@@ -2448,18 +2448,24 @@ async function addUser(role) {
 //
 // THIS IS THE FINAL, MORE ROBUST FUNCTION. PLEASE REPLACE THE OLD ONE WITH THIS.
 //
+// REPLACE your entire fetchAndPopulateReports function with this one
+
 async function fetchAndPopulateReports(isAdmin = false) {
     const tableContainerId = isAdmin ? 'admin-reports-screen' : 'report-screen';
     const tableBodyId = isAdmin ? 'admin-report-table-body' : 'report-table-body';
     const tableEl = document.querySelector(`#${tableContainerId} .report-table`);
     const tableBody = document.getElementById(tableBodyId);
     const noReportsMsg = document.getElementById(isAdmin ? 'admin-no-reports-message' : 'no-reports-message');
+    
     // --- Define all possible columns and their render logic ---
     const allColumns = [
         { key: 'vehicle_no', label: 'Vehicle No.', render: (row) => `<button onclick='printJobCardById(${row.id})' class="text-gray-500 hover:text-green-600 p-1 rounded-full shrink-0"><span class="material-symbols-outlined">download</span></button><span>${row.vehicles.vehicle_no}</span>`, className: 'flex items-center gap-x-2' },
         { key: 'vehicle_name', label: 'Vehicle Name', render: (row) => row.vehicles.vehicle_name || 'N/A' },
-        { key: 'model', label: 'Model', render: (row) => row.vehicles.vehicle_models.model },
-        { key: 'brand', label: 'Brand', render: (row) => row.vehicles.vehicle_models.brand },
+        
+        // **FIX PART 2: Added optional chaining (?.) to prevent errors**
+        { key: 'model', label: 'Model', render: (row) => row.vehicles?.vehicle_models?.model || 'N/A' },
+        { key: 'brand', label: 'Brand', render: (row) => row.vehicles?.vehicle_models?.brand || 'N/A' },
+
         { key: 'color', label: 'Color', render: (row) => row.vehicles.color || 'N/A' },
         { key: 'engine_no', label: 'Engine No', render: (row) => row.vehicles.engine_no || 'N/A' },
         { key: 'chassis_no', label: 'Chassis No', render: (row) => row.vehicles.chassis_no || 'N/A' },
@@ -2480,23 +2486,22 @@ async function fetchAndPopulateReports(isAdmin = false) {
     ];
     const visibleColumnKeys = appSettings.visible_report_columns || allColumns.map(c => c.key);
     const columnsToRender = allColumns.filter(c => visibleColumnKeys.includes(c.key));
-    // --- Dynamically build the table header ---
+
     let thead = tableEl.querySelector('thead');
     if (!thead) {
         thead = document.createElement('thead');
         tableEl.prepend(thead);
     }
     thead.innerHTML = `<tr>${columnsToRender.map(col => `<th>${col.label}</th>`).join('')}</tr>`;
-    // --- Get Filter Values ---
+    
     const fromDate = document.getElementById(isAdmin ? 'admin-filter-from-date' : 'filter-from-date').value;
     const toDate = document.getElementById(isAdmin ? 'admin-filter-to-date' : 'filter-to-date').value;
     const vehicleNo = document.getElementById(isAdmin ? 'admin-filter-vehicle-no' : 'filter-vehicle-no').value.trim().toUpperCase();
     const brand = document.getElementById(isAdmin ? 'admin-filter-brand' : 'filter-brand').value.trim();
     const execName = isAdmin ? document.getElementById('admin-filter-exec-name').value.trim() : '';
-    // --- NEW: More Robust Executive Filter Logic ---
+    
     let executiveIdsToFilter = [];
     if (isAdmin && execName) {
-        // Step 1: Find the IDs of executives matching the name.
         const { data: users, error: userError } = await sb
             .from('users')
             .select('id')
@@ -2506,65 +2511,58 @@ async function fetchAndPopulateReports(isAdmin = false) {
             return;
         }
         if (users.length === 0) {
-            // If no executives match the name, show an empty table immediately.
             tableBody.innerHTML = '';
             noReportsMsg.classList.remove('hidden');
             return;
         }
         executiveIdsToFilter = users.map(user => user.id);
     }
-    // --- End of New Logic ---
-    // --- Build The Query ---
+    
+    // **FIX PART 1: Changed 'vehicles!inner' and 'vehicle_models!inner' to regular joins**
     let query = sb.from('reports').select(`
         id, created_at, status, complaint, suggested, approved, marks,
         odometer_reading, client_name, client_phone,
         gdrive_folder_url, customer_feedback_text, customer_feedback_audio,
-        vehicles!inner(
+        vehicles(
           id, vehicle_no, vehicle_name, color, engine_no, chassis_no,
-          vehicle_models!inner(brand, model)
+          vehicle_models(brand, model)
         ),
         executive:executive_id(username, id),
         inspector:inspector_id(username, id)
     `).order('created_at', { ascending: false });
-    // --- Apply Filters To The Query ---
+
     if (isAdmin) {
-        // Step 2: Use the IDs we found to filter the main reports query.
         if (executiveIdsToFilter.length > 0) {
             query = query.in('executive_id', executiveIdsToFilter);
         }
     } else {
-        // For executives, STRICTLY filter by their own ID.
         query = query.eq('executive_id', currentUser.id);
     }
-    if (fromDate) {
-        query = query.gte('created_at', `${fromDate}T00:00:00`);
-    }
-    if (toDate) {
-        query = query.lte('created_at', `${toDate}T23:59:59`);
-    }
-    if (vehicleNo) {
-        query = query.ilike('vehicles.vehicle_no', `%${vehicleNo}%`);
-    }
-    if (brand) {
-        query = query.ilike('vehicles.vehicle_models.brand', `%${brand}%`);
-    }
+    if (fromDate) query = query.gte('created_at', `${fromDate}T00:00:00`);
+    if (toDate) query = query.lte('created_at', `${toDate}T23:59:59`);
+    if (vehicleNo) query = query.ilike('vehicles.vehicle_no', `%${vehicleNo}%`);
+    if (brand) query = query.ilike('vehicles.vehicle_models.brand', `%${brand}%`);
+    
     const reports = await handleSupabaseQuery(query, "Failed to fetch reports.");
     if (reports === null) return;
+
     reportsDataStore = {};
     reports.forEach(row => { reportsDataStore[row.id] = row; });
-    // --- Dynamically build the table body ---
+    
     tableBody.innerHTML = '';
     if (reports.length === 0) {
         noReportsMsg.classList.remove('hidden');
         return;
     }
+
     noReportsMsg.classList.add('hidden');
     reports.forEach(row => {
+        if (!row.vehicles) return; // Add a safety check in case vehicle data is missing entirely
         const tr = document.createElement('tr');
         columnsToRender.forEach(col => {
             const td = document.createElement('td');
             if (col.className) td.className = col.className;
-            if (col.key === 'complaint' || col.key === 'suggested' || col.key === 'approved' || col.key === 'feedback_text') {
+            if (['complaint', 'suggested', 'approved', 'feedback_text'].includes(col.key)) {
                 td.title = formatArrayCell(row[col.key]);
             }
             td.innerHTML = col.render(row);
@@ -4478,7 +4476,7 @@ function showAdminScreen(screenId) {
     document.getElementById(screenId).style.display = 'block';
     
     if (screenId === 'admin-vehicle-management-screen') renderVehicleModelList();
-    if (screenId === 'admin-reports-screen') fetchAndPopulateReports(true);
+    if (screenId === 'admin-reports-screen') clearAdminReportFilters();
     if (screenId === 'admin-analytics-screen') { populateAnalyticsFilters(); renderAnalytics(); }
     if (screenId === 'admin-executive-management-screen') renderUserList('executive');
     if (screenId === 'admin-admin-management-screen') renderUserList('admin');
@@ -4496,7 +4494,7 @@ function showExecutiveScreen(screenId) {
     document.getElementById(screenId).style.display = 'block';
     setActiveNav(screenId);
 
-    if (screenId === 'report-screen') fetchAndPopulateReports(false);
+    if (screenId === 'report-screen') clearReportFilters();
     
     // THE FIX: The default tab is now 'ready-to-close'
     if (screenId === 'due-date-screen') showCloseTab('ready-to-close'); 
@@ -4850,78 +4848,81 @@ document.addEventListener('DOMContentLoaded', async () => { // Make this async
             }
         }
 
-        function printJobCard(reportData) {
-            document.getElementById('print-report-date').textContent = new Date(reportData.created_at).toLocaleString();
-            document.getElementById('print-executive-name').textContent = reportData.executive?.username || 'N/A';
-            document.getElementById('print-vehicle-no').textContent = reportData.vehicles.vehicle_no || 'N/A';
-            document.getElementById('print-vehicle-name').textContent = `${reportData.vehicles.vehicle_models.brand} ${reportData.vehicles.vehicle_models.model}`;
-            document.getElementById('print-engine-chassis').textContent = `${reportData.vehicles.engine_no || 'N/A'} / ${reportData.vehicles.chassis_no || 'N/A'}`;
-			document.getElementById('print-client-name').textContent = reportData.client_name || 'N/A';
-			document.getElementById('print-client-phone').textContent = reportData.client_phone || 'N/A';
-			document.getElementById('print-odometer').textContent = reportData.odometer_reading || 'N/A';
+       // REPLACE your existing printJobCard function with this corrected version
 
-            
-            const populateList = (listId, dataString) => {
-                const list = document.getElementById(listId);
-                list.innerHTML = '';
-                try {
-                    const items = JSON.parse(dataString || '[]'); // Safely parse the data
-                    if (items && items.length > 0) {
-                        items.forEach(item => {
-                            const li = document.createElement('li');
-                            // **THE FIX: Check if the item is an object and use its .text property**
-                            if (typeof item === 'object' && item !== null && item.text) {
-                                li.textContent = item.text;
-                            } else {
-                                // Fallback for older data that might just be strings
-                                li.textContent = item;
-                            }
-                            list.appendChild(li);
-                        });
+function printJobCard(reportData) {
+    document.getElementById('print-report-date').textContent = new Date(reportData.created_at).toLocaleString();
+    document.getElementById('print-executive-name').textContent = reportData.executive?.username || 'N/A';
+    document.getElementById('print-vehicle-no').textContent = reportData.vehicles.vehicle_no || 'N/A';
+    
+    // **THE FIX IS HERE: Safely access brand and model to prevent crashing**
+    document.getElementById('print-vehicle-name').textContent = `${reportData.vehicles?.vehicle_models?.brand || ''} ${reportData.vehicles?.vehicle_models?.model || ''}`.trim();
+    
+    document.getElementById('print-engine-chassis').textContent = `${reportData.vehicles.engine_no || 'N/A'} / ${reportData.vehicles.chassis_no || 'N/A'}`;
+    document.getElementById('print-client-name').textContent = reportData.client_name || 'N/A';
+    document.getElementById('print-client-phone').textContent = reportData.client_phone || 'N/A';
+    document.getElementById('print-odometer').textContent = reportData.odometer_reading || 'N/A';
+
+    
+    const populateList = (listId, dataString) => {
+        const list = document.getElementById(listId);
+        list.innerHTML = '';
+        try {
+            const items = JSON.parse(dataString || '[]');
+            if (items && items.length > 0) {
+                items.forEach(item => {
+                    const li = document.createElement('li');
+                    if (typeof item === 'object' && item !== null && item.text) {
+                        li.textContent = item.text;
                     } else {
-                        list.innerHTML = '<li>N/A</li>';
+                        li.textContent = item;
                     }
-                } catch (e) {
-                    list.innerHTML = '<li>Error loading data</li>';
-                }
-            };
-            populateList('print-complaints-list', reportData.complaint);
-            populateList('print-suggested-list', reportData.suggested);
-            populateList('print-approved-list', reportData.approved);
-
-            const printImage = document.getElementById('print-car-image');
-            const printCanvas = document.getElementById('print-damage-canvas');
-            const marksArray = reportData.marks ? JSON.parse(reportData.marks) : [];
-
-            const drawMarksAndPrint = () => {
-                const sourceWidth = 384; 
-                const aspectRatio = printImage.naturalWidth / printImage.naturalHeight;
-                const sourceHeight = sourceWidth / aspectRatio;
-
-                const destWidth = 400;
-                const destHeight = destWidth / aspectRatio;
-                
-                printCanvas.width = destWidth;
-                printCanvas.height = destHeight;
-
-                const widthRatio = destWidth / sourceWidth;
-                const heightRatio = destHeight / sourceHeight;
-
-                const scaledMarks = marksArray.map(mark => ({
-                    x: mark.x * widthRatio,
-                    y: mark.y * heightRatio
-                }));
-
-                redrawDamageMarks(printCanvas, scaledMarks);
-                window.print();
-            };
-
-            if (printImage.complete) {
-                drawMarksAndPrint();
+                    list.appendChild(li);
+                });
             } else {
-                printImage.onload = drawMarksAndPrint;
+                list.innerHTML = '<li>N/A</li>';
             }
+        } catch (e) {
+            list.innerHTML = '<li>Error loading data</li>';
         }
+    };
+    populateList('print-complaints-list', reportData.complaint);
+    populateList('print-suggested-list', reportData.suggested);
+    populateList('print-approved-list', reportData.approved);
+
+    const printImage = document.getElementById('print-car-image');
+    const printCanvas = document.getElementById('print-damage-canvas');
+    const marksArray = reportData.marks ? JSON.parse(reportData.marks) : [];
+
+    const drawMarksAndPrint = () => {
+        const sourceWidth = 384; 
+        const aspectRatio = printImage.naturalWidth / printImage.naturalHeight;
+        const sourceHeight = sourceWidth / aspectRatio;
+
+        const destWidth = 400;
+        const destHeight = destWidth / aspectRatio;
+        
+        printCanvas.width = destWidth;
+        printCanvas.height = destHeight;
+
+        const widthRatio = destWidth / sourceWidth;
+        const heightRatio = destHeight / sourceHeight;
+
+        const scaledMarks = marksArray.map(mark => ({
+            x: mark.x * widthRatio,
+            y: mark.y * heightRatio
+        }));
+
+        redrawDamageMarks(printCanvas, scaledMarks);
+        window.print();
+    };
+
+    if (printImage.complete) {
+        drawMarksAndPrint();
+    } else {
+        printImage.onload = drawMarksAndPrint;
+    }
+}
 
 		function downloadReport() {
             const isAdminScreenActive = document.getElementById('admin-screens').classList.contains('active-screen');
